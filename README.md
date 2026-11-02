@@ -15,6 +15,7 @@ macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/H
   keeps (orange). One scale for every row: the largest library is 100%.
 - **Search across all sites.** One search through SharePoint's index, with filters for site, type, size and
   date. **Show in tree** opens the folders down to the result and highlights it.
+- **Download** any file from the tree or from search results, without opening SharePoint.
 - **Rename, copy and move** within a library, with a preview and a check that the item hasn't changed meanwhile.
 - **Trim old versions** for a site (Automatic, older than N days, or keep N versions), with a typed
   confirmation and a stop button. Sites with a trim waiting, running or recently finished are marked.

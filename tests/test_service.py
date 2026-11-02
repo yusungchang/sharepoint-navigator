@@ -144,6 +144,8 @@ class FakeTenant:
             value["folder"] = {"childCount": len(self.children(item["id"]))}
         else:
             value["file"] = {"mimeType": "application/octet-stream"}
+            # Graph adds this pre-authorised address to file items (shortened here).
+            value["@microsoft.graph.downloadUrl"] = f"https://{HOST}/_layouts/15/download.aspx?UniqueId={item['id']}&tempauth=x"
         return value
 
     def search_hit(self, item: dict) -> dict:
@@ -710,6 +712,27 @@ class SearchTests(ServiceTest):
     def test_too_deep_paging_is_refused(self):
         self.refused("/api/search", {"query": "x", "from": nav.SEARCH_MAX_FROM}, "Only the first")
 
+
+
+# ---- Download ----
+
+class DownloadTests(ServiceTest):
+    def link(self, item_path, site=ALPHA):
+        return self.call("/api/download-link", {"siteUrl": site, "itemPath": item_path})
+
+    def test_file_gets_a_sharepoint_link(self):
+        status, result = self.link(f"{DOCS}/Folder A/Report.docx")
+        self.assertEqual(status, 200, result)
+        self.assertTrue(result["url"].startswith(f"https://{HOST}/"))
+        self.assertEqual(result["name"], "Report.docx")
+        self.assertEqual(TENANT.graph_patches(), [])          # read-only
+
+    def test_folder_is_refused(self):
+        self.refused("/api/download-link", {"siteUrl": ALPHA, "itemPath": f"{DOCS}/Folder A"}, "Only files")
+
+    def test_site_outside_the_list_is_refused(self):
+        self.refused("/api/download-link", {"siteUrl": f"https://{HOST}/sites/Gamma", "itemPath": "/sites/Gamma/x.txt"},
+                     "not in this tenant's loaded site list")
 
 
 # ---- Tenant and client ID settings (no service needed) ----

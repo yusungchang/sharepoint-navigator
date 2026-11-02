@@ -148,7 +148,7 @@
     .legend-swatch.history { background: #f0ad4e; }
     /* ==== Tree grid and rows ==== */
     /* Header and rows share --columns; only the name cell is indented per depth. */
-    .tree-head, .row { --columns: minmax(260px, 1.5fr) minmax(180px, 1fr) 176px 64px 132px; }
+    .tree-head, .row { --columns: minmax(260px, 1.5fr) minmax(180px, 1fr) 176px 64px 164px; }
     /* Tenant address beside "Library / folder": the rows' /sites/... paths continue from it. Kept as typed (no caps). */
     .head-tenant { margin-left: 10px; text-transform: none; letter-spacing: 0; font-weight: 500; }
     .head-tenant:empty { display: none; }
@@ -337,7 +337,7 @@
     .search-summary { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
     .search-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
     /* Same grid idea as the tree: header and rows share --columns. */
-    .search-head, .search-row { --columns: minmax(220px, 1.3fr) minmax(160px, 1fr) 96px 120px 64px; }
+    .search-head, .search-row { --columns: minmax(220px, 1.3fr) minmax(160px, 1fr) 96px 120px 96px; }
     .search-head { display: grid; grid-template-columns: var(--columns); gap: 16px; padding: 10px 24px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
     #searchResults { padding: 4px 12px 8px; }
     .search-row { min-height: 42px; }
@@ -869,6 +869,8 @@
           'notice.title': 'About these numbers', 'size.tip': 'Current files: {current} · Version history: {history}',
           'search.button': 'Search', 'search.back': '← Back to libraries',
           'badge.signIn': 'Sign-in needed', 'connect.change': 'Change organisation',
+          'row.download': 'Download', 'row.downloadTitle': 'Download {name}',
+          'row.downloadStarted': 'Downloading {name}…', 'row.downloadFailed': "Couldn't get a download link.",
           'confirm.changeOrg': 'Switch to another organisation? You will sign in again; nothing in SharePoint changes.',
           'connect.setupTitle': 'Connect to your Microsoft 365',
           'connect.setupText': 'Two things your Microsoft 365 admin can tell you. They are saved on this computer, so you are asked only once.',
@@ -993,6 +995,8 @@
           'notice.title': '이 숫자에 대해', 'size.tip': '현재 파일: {current} · 버전 기록: {history}',
           'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기',
           'badge.signIn': '로그인 필요', 'connect.change': '조직 바꾸기',
+          'row.download': '다운로드', 'row.downloadTitle': '{name} 다운로드',
+          'row.downloadStarted': '{name} 다운로드 중…', 'row.downloadFailed': '다운로드 링크를 받지 못했습니다.',
           'confirm.changeOrg': '다른 조직으로 바꿀까요? 다시 로그인하게 되며, SharePoint의 내용은 바뀌지 않습니다.',
           'connect.setupTitle': 'Microsoft 365에 연결',
           'connect.setupText': 'Microsoft 365 관리자에게 받을 수 있는 두 가지입니다. 이 컴퓨터에 저장되므로 한 번만 묻습니다.',
@@ -1493,6 +1497,8 @@
         up: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
         folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
         chevron: '<path d="M9 6l6 6-6 6"/>',
+        // Arrow into a tray: Download (files only).
+        download: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 19h14"/>',
         // Folder with a magnifier: "Show in tree" (like Finder's Show in Enclosing Folder). Shape after Lucide folder-search (ISC).
         reveal: '<path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"/><circle cx="17" cy="17" r="3"/><path d="M21 21l-1.9-1.9"/>',
         // Trash can with a clock: permanent deletion of old versions. A plain trash can
@@ -1662,6 +1668,8 @@
           link.addEventListener('click', e => e.stopPropagation());
           actionsCell.append(link);
         }
+        // Download: files only, and only with the service.
+        if (node.kind === 'file' && serviceOnline && node.siteUrl && node.path) addDownloadButton(actionsCell, node.siteUrl, node.path, node.name);
         // Rename, Copy, Move: folders and files only, and only with the service.
         if ((node.kind === 'folder' || node.kind === 'file') && serviceOnline) {
           const rename = el('button', 'item-action');
@@ -2932,6 +2940,44 @@
           refreshReportButton.disabled = !serviceOnline;
         }
       }
+      // ---- Download ----
+      // Ask the app for the file's short-lived download address (from Microsoft, valid about an
+      // hour), then let the browser save it. The page stays where it is.
+      function addDownloadButton(target, siteUrl, itemPath, name) {
+        const button = el('button', 'item-action');
+        button.type = 'button';
+        setActionIcon(button, 'download', t('row.download'), t('row.downloadTitle', { name }));
+        button.addEventListener('click', async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          button.disabled = true;
+          try {
+            const response = await fetch('/api/download-link', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+              body: JSON.stringify({ siteUrl, itemPath })
+            });
+            const value = await response.json();
+            if (!response.ok || !value.ok) throw new Error(value.error || t('row.downloadFailed'));
+            const link = document.createElement('a');
+            link.href = value.url;
+            link.download = value.name || name;
+            link.rel = 'noopener';
+            document.body.append(link);
+            link.click();
+            link.remove();
+            $('status').className = 'status success';
+            $('status').textContent = t('row.downloadStarted', { name: value.name || name });
+          } catch (err) {
+            $('status').className = 'status';
+            $('status').textContent = err.message || t('row.downloadFailed');
+          } finally {
+            button.disabled = false;
+          }
+        });
+        target.append(button);
+      }
+
       // ---- Search (all libraries) ----
       // Enter in the search box asks the app for one block of results from SharePoint's search
       // index (/api/search), across every site at once. The results replace the tree until Back,
@@ -3076,7 +3122,9 @@
         open.target = '_blank';
         open.rel = 'noopener noreferrer';
         setActionIcon(open, 'open', t('row.openTitle'), t('row.openTitle'));
-        actions.append(reveal, open);
+        actions.append(reveal);
+        if (!result.isFolder && result.inSiteList) addDownloadButton(actions, result.siteUrl, result.itemPath, result.name);
+        actions.append(open);
         row.append(nameCell, where, size, modified, actions);
         return row;
       }

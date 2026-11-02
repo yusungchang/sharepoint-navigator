@@ -4,7 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
-| 0.6.0 | 2026-11-02 | No terminal window: setup and Microsoft sign-in happen in the browser page. Windowless apps with the app icon: `SharePoint Navigator.app` (macOS, background app) and `SharePoint Navigator.exe` (Windows). Change organisation from the page. 54 offline tests. |
+| 0.6.0 | 2026-11-02 | No terminal window: setup and Microsoft sign-in happen in the browser page. Windowless apps with the app icon: `SharePoint Navigator.app` (macOS, background app) and `SharePoint Navigator.exe` (Windows). Change organisation from the page. Download button for files in the tree and in search results. 57 offline tests. |
 | 0.5.0 | 2026-11-02 | Public on GitHub (MIT) with a product page. First run asks for the tenant and client ID and saves them in the user's folder (`--setup` to change); a client ID file beside the app still wins. GitHub builds macOS and Windows apps on each release. Demo mode with a made-up company for screenshots. 52 offline tests. |
 | 0.4.0 | 2026-11-02 | New: search across all libraries. Enter in the search box searches every site through SharePoint's search index, with site, type, size and date filters and sorting. A Search button sits beside the box. Each result offers Show in tree (folder-with-magnifier icon; opens the folders down to it and highlights it) and Open. The box no longer filters only the loaded rows. 46 offline tests (14 new). |
 | 0.3.2 | 2026-11-01 | Bar parts renamed to "Current files" and "Version history"; rows show both numbers with a coloured square and no words, since the legend at the top names the colours. Trim icon is now a trash can with a clock. Site lines drop the repeated tenant address, which now sits once beside the "Library / folder" header. Sort by clicking column headers; the colour legend sits in the bar column's header. Bars and folder/file icons inside an opened library are visible again in light theme. Rename's name check is one shared method; Move explains a name clash in plain words. Offline tests for the service (32 checks, faked Graph and SharePoint). Files renamed to kebab-case: `sharepoint-navigator.py`, `.command`, `.html`. PowerShell scripts tidied (names and help text only). |
@@ -55,10 +55,17 @@ product page's SVG, turned into `assets/icon.icns` (with Apple's margin) and `as
 `tools/make_icons.py`; the app's tab icon is the same design. On macOS a client ID file is looked for next to the
 .app, not inside it. The release zips keep their names; inside are the new apps (`ditto` zips the .app).
 
+**Download.** The owner asked for a download button in the tree and in search results. Files get a Download
+icon (tree: after Open; search: between Show in tree and Open). It asks the app for Graph's
+`@microsoft.graph.downloadUrl`, a pre-authorised address valid for about an hour, so the browser saves the file
+under its own name even when it isn't signed in to SharePoint. Read-only; only a SharePoint https address is ever
+handed to the browser. Folders get no button: Graph has no simple folder-as-zip download. The action columns
+widened by one icon. New route `/api/download-link`, 3 new tests (file link, folder refused, unknown site refused).
+
 **Pages and docs:** first-launch, install and uninstall steps no longer mention a terminal, and use the new names.
 Switching organisation is "Change organisation" instead of `--setup` (which still works from source).
 
-**Checks.** Offline tests 54/54 (new: setup → code → ready with settings saved, a bad client ID refused,
+**Checks.** Offline tests 57/57 (new: setup → code → ready with settings saved, a bad client ID refused,
 Change organisation stopping a waiting sign-in; settings helpers rewritten). Built the Mac app here: background
 app flag, version and icon in the bundle, signature valid, self-check passes, a second launch reopens the page,
 output in app.log. The demo has `--setup` and `--signin` modes, used to check both new screens in English/Korean

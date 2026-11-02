@@ -179,6 +179,8 @@ class Tenant:
             value["folder"] = {"childCount": len(self.children(item["id"]))}
         else:
             value["file"] = {"mimeType": "application/octet-stream"}
+            # Points nowhere real: the demo has no files to download.
+            value["@microsoft.graph.downloadUrl"] = f"https://{HOST}/_layouts/15/download.aspx?demo={item['id']}"
         return value
 
     def metric(self, item, history):

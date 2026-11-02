@@ -19,6 +19,8 @@ REST, using the same sign-in, fills both gaps:
   PowerShell trim cmdlets. Starting or stopping one uses an AllSites.FullControl token.
   /api/trim-queue reads every site's trim and version-policy job (GetProgressForSetVersionPolicyForDocLibs).
 
+Download: /api/download-link returns Graph's short-lived @microsoft.graph.downloadUrl for one file.
+
 Search: /api/search sends one Graph POST /search/query (Microsoft Search, driveItem hits) across
 every site, read-only and limited to this tenant's SharePoint host. The page lists the hits and can
 open each one or show it in the tree.
@@ -1804,6 +1806,28 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
                 # -- /api/search: one block of search results across the loaded sites (read-only).
                 if self.path == "/api/search":
                     self.send_json(200, {"ok": True, **run_search(graph, tenant, sites, payload, allowed_sites)})
+                    return
+                # -- /api/download-link: a short-lived download address for one file (read-only).
+                # Graph's @microsoft.graph.downloadUrl is pre-authorised for about an hour, so the
+                # browser can fetch the file without being signed in to SharePoint itself.
+                if self.path == "/api/download-link":
+                    site_url = normalize_site_url(str(payload.get("siteUrl") or ""))
+                    item_path = str(payload.get("itemPath") or "")
+                    if site_url.lower() not in allowed_sites:
+                        raise NavigatorError("The selected site is not in this tenant's loaded site list.")
+                    if not item_path:
+                        raise NavigatorError("The selected file information is incomplete.")
+                    drive, item = inventory.get_item_by_path(site_url, item_path)
+                    if item.get("file") is None:
+                        raise NavigatorError("Only files can be downloaded.")
+                    found = graph.get(f"/drives/{quote(drive['id'], safe='')}/items/{quote(item['id'], safe='')}"
+                                      "?$select=id,name,@microsoft.graph.downloadUrl")
+                    url = str(found.get("@microsoft.graph.downloadUrl") or "")
+                    # Only ever hand the browser a SharePoint https address.
+                    host = (urlsplit(url).hostname or "").lower()
+                    if not url.startswith("https://") or not (host.endswith(".sharepoint.com") or host.endswith(".sharepoint.us")):
+                        raise NavigatorError("SharePoint didn't return a download address for this file.")
+                    self.send_json(200, {"ok": True, "url": url, "name": found.get("name") or item.get("name") or ""})
                     return
                 # -- /api/transfer: copy or move a file or folder within one site.
                 if self.path == "/api/transfer":
