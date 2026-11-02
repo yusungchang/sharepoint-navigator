@@ -1,0 +1,18 @@
+# Private: client IDs, owner-only notes, local settings
+*_clientid.txt
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Python and builds
+.venv/
+.venv-*/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/

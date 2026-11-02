@@ -1,0 +1,175 @@
+/* SharePoint Navigator product page. Same design as the PDF Epsilon page; light and dark follow the system. */
+:root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --ink: #1b1b1a;
+  --muted: #62625d;
+  --line: #e3e3de;
+  --accent: #2f6fdf;
+  --accent-ink: #ffffff;
+  --good: #1f8a4c;
+  --hero: radial-gradient(1200px 500px at 50% -120px, #dfe9fb 0%, transparent 70%);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131312;
+    --panel: #1d1d1c;
+    --ink: #ededea;
+    --muted: #a3a39d;
+    --line: #2f2f2d;
+    --accent: #6a9cf5;
+    --accent-ink: #0d1424;
+    --good: #4cc27f;
+    --hero: radial-gradient(1200px 500px at 50% -120px, #1b2740 0%, transparent 70%);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Apple SD Gothic Neo", "Malgun Gothic", Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* Korean wraps between words, not inside them. */
+:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; word-break: break-all; }
+
+.top {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px max(16px, calc((100vw - 1080px) / 2)); background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 650; font-size: 17px; }
+.brand:hover { text-decoration: none; }
+.top nav { display: flex; align-items: center; gap: 18px; font-size: 15px; }
+.top nav a { color: var(--muted); }
+.top nav a:hover { color: var(--ink); text-decoration: none; }
+.lang {
+  font: inherit; font-size: 14px; color: var(--ink); background: none; border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 12px; cursor: pointer;
+}
+.lang:hover { border-color: var(--accent); }
+
+main { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+section { padding: 64px 0; }
+h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.15; }
+h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 10px; text-align: center; }
+.sub { color: var(--muted); text-align: center; margin: 0 0 32px; }
+
+.hero { text-align: center; padding-top: 56px; background: var(--hero); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+.hero-icon { width: 112px; height: 112px; }
+.hero h1 { font-size: clamp(36px, 6.5vw, 64px); margin: 18px 0 16px; }
+.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 28px; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 20px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-weight: 600; font-size: 15px;
+}
+.button:hover { text-decoration: none; border-color: var(--accent); }
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.button.primary:hover { filter: brightness(1.08); }
+.version { color: var(--muted); font-size: 14px; margin: 14px 0 0; }
+/* Six badges: two even rows of three; on narrow screens they wrap freely. */
+.badges { display: grid; grid-template-columns: repeat(3, max-content); justify-content: center; gap: 10px; margin: 30px auto 0; }
+@media (max-width: 820px) { .badges { display: flex; flex-wrap: wrap; } }
+.badge {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: var(--ink);
+}
+a.badge:hover { text-decoration: none; border-color: var(--accent); }
+.badge svg {
+  flex: none; width: 34px; height: 34px; padding: 7px; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+  fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+}
+.badge svg .cut { stroke: color-mix(in srgb, var(--accent) 12%, var(--panel)); stroke-width: 4.5; }
+.badge span { display: flex; flex-direction: column; line-height: 1.25; }
+.badge b { font-size: 14px; font-weight: 650; }
+.badge small { font-size: 12.5px; color: var(--muted); }
+.shot { margin: 0; }
+.shot img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(0, 0, 0, .18); }
+.hero-shot { max-width: 760px; margin: 48px auto 0; }
+
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+.grid article { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+.grid h3 { margin: 0 0 8px; font-size: 18px; }
+.grid p { margin: 0; color: var(--muted); font-size: 15px; }
+
+.numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.numbers div { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; text-align: center; }
+.numbers strong { display: block; font-size: 34px; color: var(--good); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.numbers span { color: var(--muted); font-size: 14px; }
+
+/* Supporting evidence, quieter than the sections above it. */
+.security { padding-top: 24px; }
+.security h2 { font-size: clamp(20px, 2.6vw, 24px); }
+.security .sub { font-size: 15px; max-width: 640px; margin-left: auto; margin-right: auto; }
+.security .numbers div { padding: 14px; background: transparent; }
+.security .numbers strong { color: var(--ink); font-size: 22px; }
+.security .numbers span { font-size: 13px; }
+.security .checks { font-size: 14px; margin-top: 20px; }
+.checks { list-style: none; padding: 0; margin: 28px auto 0; max-width: 680px; display: grid; gap: 10px; }
+.checks li { position: relative; padding-left: 28px; color: var(--muted); }
+.checks li::before { content: "✓"; position: absolute; left: 4px; color: var(--good); font-weight: 700; }
+.showcase { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; align-items: center; }
+.showcase h2 { text-align: left; }
+.showcase p { color: var(--muted); font-size: 17px; }
+
+.platforms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.platforms article { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.platforms article.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.platforms h3 { margin: 0 0 4px; font-size: 20px; }
+.platforms .button { width: 100%; }
+.note { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.steps { border-top: 1px solid var(--line); padding-top: 12px; margin-top: auto; font-size: 14px; }
+.steps h4 { margin: 0 0 6px; font-size: 14px; }
+.steps ol, .after ol { margin: 0; padding-left: 20px; color: var(--muted); }
+.steps li, .after li { margin: 4px 0; }
+.steps b, .after b { color: var(--ink); }
+.after {
+  max-width: 460px; width: calc(100% - 32px); border: 1px solid var(--line); border-radius: 16px;
+  background: var(--panel); color: var(--ink); padding: 24px; box-shadow: 0 30px 80px rgba(0, 0, 0, .35);
+}
+.after::backdrop { background: rgba(0, 0, 0, .45); }
+.after h3 { margin: 0 0 6px; font-size: 20px; }
+.after .sub-left { color: var(--muted); margin: 0 0 14px; font-size: 15px; }
+.after ol { font-size: 15px; }
+.after form { margin: 20px 0 0; text-align: right; }
+details { border-top: 1px solid var(--line); padding-top: 10px; margin-top: auto; font-size: 14px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { color: var(--muted); margin: 8px 0 0; }
+.all { text-align: center; margin-top: 24px; }
+
+.author { margin: 6px 0 0; font-size: 13px; }
+footer { border-top: 1px solid var(--line); text-align: center; color: var(--muted); font-size: 14px; padding: 28px 16px 40px; }
+
+@media (max-width: 860px) {
+  .grid, .platforms { grid-template-columns: 1fr; }
+  .numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .showcase { grid-template-columns: 1fr; }
+  .top nav a:not([href^="https"]) { display: none; }
+}
+@media (max-width: 480px) {
+  .numbers { grid-template-columns: 1fr; }
+  .top nav { gap: 12px; }
+}
+
+/* ---- SharePoint Navigator additions ---- */
+.shot picture { display: block; }
+.brand img { border-radius: 9px; }
+/* Admin setup: a numbered list in a card, centred like the other sections. */
+.setup-steps {
+  max-width: 720px; margin: 0 auto; padding: 22px 22px 22px 46px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 14px; display: grid; gap: 10px;
+}
+.setup-steps li { padding-left: 4px; }
+.setup-steps b { font-weight: 650; }
+.setup-note { max-width: 720px; margin: 16px auto 0; color: var(--muted); font-size: 14px; text-align: center; }
+.download .sub { margin-bottom: 32px; }
+.fine { margin: 10px 0 0; font-size: 12px; }
+.showcase b { color: var(--ink); font-weight: 650; }

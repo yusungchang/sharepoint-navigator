@@ -1,0 +1,2995 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>SharePoint Navigator</title>
+  <!-- Inline tab icon, so the browser does not request /favicon.ico. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M7 10.5h7l2 2.5h9v9.5H7z' fill='white'/%3E%3C/svg%3E">
+  <script>
+    // Apply a saved Light/Dark theme before first paint (no flash). "System"
+    // leaves html[data-theme] unset; try guards against missing localStorage.
+    try {
+      const savedTheme = localStorage.getItem('spnav-theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
+    } catch {}
+  </script>
+  <style>
+    /* ==== Design tokens (light theme) ==== */
+    /* The dark theme mostly just redefines these tokens. */
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --surface: #fff;
+      --surface-2: #f8fafc;
+      --text: #17212b;
+      --muted: #667482;
+      --border: #e2e8ee;
+      --accent: #2563eb;
+      --accent-2: #60a5fa;
+      --track: #e9eff6;
+      --shadow: 0 16px 44px rgba(22, 34, 51, .08);
+      /* Opened-library tray: background, shadow under the library row, lit bottom edge, row hover,
+         and the bar track inside it (--track is almost the tray colour in light theme, so it vanished). */
+      --well-bg: #eff3f8; --well-shade: rgba(22, 34, 51, .10); --well-edge: #ffffff; --well-glow: rgba(255, 255, 255, .9); --well-hover: #e5ebf3; --well-track: #d6dfea;
+      --radius: 18px;
+      /* Permanent-action colours (Trim old versions): text, soft box, box edge, solid button. */
+      --danger: #b42318; --danger-bg: #fef3f2; --danger-border: #f6c9c4; --danger-solid: #d92d20;
+      /* Trim-queue badge on library rows: text, fill, edge. */
+      --queue-text: #1d4ed8; --queue-bg: #eaf1ff; --queue-border: #c7d8fb;
+      /* Badge for a trim that finished recently. */
+      --done-text: #197244; --done-bg: #ecfdf3; --done-border: #b7e4c7;
+    }
+    /* ==== Base, page shell and header ==== */
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1000px 500px at 10% -10%, #dceafe 0%, transparent 65%), var(--bg);
+      color: var(--text);
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    }
+    button, input { font: inherit; }
+    .shell { max-width: 1840px; padding: 38px 30px 54px; margin: 0 auto; }
+    .hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 24px; }
+    .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .12em; font-size: 11px; font-weight: 800; }
+    h1 { margin: 8px 0 7px; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.045em; line-height: 1.08; }
+    /* Version tag after the title: small and quiet, aligned to the title's baseline. */
+    .app-version { margin-left: 10px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: 0; vertical-align: baseline; }
+    .badge { border: 1px solid #c9dcff; background: #edf4ff; color: #2458a6; padding: 9px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    /* Shared card surface (loading panel and tree panel). */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    /* ==== Loading panel (#scanPanel) ==== */
+    .scan-panel { padding: 20px 22px; margin-bottom: 12px; border-color: #c8d9f4; }
+    .scan-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    .scan-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+    .scan-message { color: var(--muted); margin-top: 4px; font-size: 13px; overflow-wrap: anywhere; }
+    .scan-percent { color: var(--accent); font-size: 24px; line-height: 1; font-weight: 850; font-variant-numeric: tabular-nums; }
+    .scan-track { height: 14px; margin: 16px 0 10px; background: var(--track); border-radius: 999px; overflow: hidden; }
+    .scan-fill { position: relative; overflow: hidden; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #60a5fa); transition: width .35s ease; }
+    .scan-fill.scanning::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); animation: scan-shimmer 1.2s linear infinite; }
+    @keyframes scan-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+    .scan-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .scan-errors { margin-top: 6px; color: #b45309; font-size: 12px; overflow-wrap: anywhere; }
+    /* .done (added when the scan completes) collapses the panel to one slim line. */
+    .scan-panel.done { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 12px 9px 18px; box-shadow: none; border-color: var(--border); }
+    .scan-panel.done .scan-top { flex: 1 1 320px; align-items: center; }
+    .scan-panel.done .scan-top > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+    .scan-panel.done .scan-title { font-size: 14px; font-weight: 700; letter-spacing: 0; }
+    .scan-panel.done .scan-title::before { content: '✓ '; color: #197244; }
+    .scan-panel.done .scan-message, .scan-panel.done .scan-percent, .scan-panel.done .scan-track { display: none; }
+    .scan-panel.done .scan-errors { margin-top: 0; }
+    .scan-panel.done .scan-meta { flex: 0 1 auto; gap: 14px; }
+    .scan-panel.done .button { padding: 6px 10px; font-size: 13px; }
+    .scan-panel.done .button.primary { background: var(--surface); color: var(--text); border-color: var(--border); }
+    .scan-meta strong { color: var(--text); }
+    /* ==== Buttons and button groups ==== */
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .service-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+    .button { border: 1px solid var(--border); color: var(--text); background: var(--surface); border-radius: 10px; padding: 9px 12px; cursor: pointer; font-weight: 650; transition: .15s ease; }
+    .button:hover { border-color: #a7bad0; transform: translateY(-1px); }
+    .button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .button.primary:hover { background: #1d4ed8; }
+    .button:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+    /* Utility: hide; !important beats any other display value. */
+    .hidden { display: none !important; }
+    /* ==== Summary strip (#stats): one line of small text ==== */
+    .stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; margin: 0 6px 14px; color: var(--muted); font-size: 12px; }
+    .stat > div { display: inline; }
+    .stat-value, .stat-note { margin-left: 4px; }
+    .stat-label { color: var(--muted); font-weight: 500; }
+    .stat-value { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+    .stat-note { color: var(--muted); }
+    .stat-note:not(:empty)::before { content: '· '; }
+    /* Trims toggle: looks like the other summary items, with a chevron. */
+    .stat-toggle { display: inline-flex; align-items: baseline; padding: 2px 6px; margin: -2px -6px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .stat-toggle:hover, .stat-toggle:focus-visible { background: var(--surface-2); outline: none; }
+    .stat-toggle::after { content: '›'; margin-left: 6px; color: var(--muted); transition: transform .15s ease; }
+    .stat-toggle[aria-expanded="true"]::after { transform: rotate(90deg); }
+    /* ==== Trims pane ==== */
+    .trims-panel { margin: -4px 0 14px; padding: 12px 16px; }
+    .trims-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 6px; }
+    .trims-head .button { padding: 6px 10px; font-size: 13px; }
+    .trims-hint { margin-left: 10px; color: var(--muted); font-size: 12px; }
+    .trims-list { display: grid; font-size: 13px; }
+    .trims-row { display: grid; grid-template-columns: minmax(140px, 220px) auto 1fr; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); }
+    .trims-site { justify-self: start; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+    .trims-site:hover, .trims-site:focus-visible { color: var(--accent); outline: none; text-decoration: underline; }
+    .trims-detail { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .trims-empty { padding: 6px 0; color: var(--muted); }
+    /* ==== Toolbar: search; sort menu and legend only on narrow screens (no column header there) ==== */
+    .toolbar { padding: 13px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+    /* Search box plus its Search button. */
+    .search-group { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 540px; }
+    .search-wrap { position: relative; flex: 1; min-width: 0; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); }
+    .search { width: 100%; border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px; outline: none; padding: 9px 12px 9px 36px; color: var(--text); }
+    .search:focus { border-color: #83aef7; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+    .sort-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+    /* Custom select so it matches the search box in both themes. */
+    .sort-wrap { position: relative; display: inline-flex; }
+    .sort-wrap::after { content: ''; position: absolute; right: 13px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+    .sort-select { appearance: none; -webkit-appearance: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 10px; padding: 9px 34px 9px 12px; font: inherit; font-size: 14px; font-weight: 500; line-height: 1.45; cursor: pointer; }
+    .sort-select:focus { outline: none; border-color: #83aef7; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+    .sort-select:disabled { cursor: default; opacity: .6; }
+    /* Wide screens sort by column header and show the legend in the bar column's header. */
+    .toolbar .narrow-only { display: none; }
+    /* Segmented switches (Theme, Language); the script sets aria-pressed. */
+    .segmented { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .segmented button { border: 0; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+    /* Bar legend. Swatch colors match .bar-segment.current / .history. */
+    .legend { color: var(--muted); font-size: 12px; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px 15px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .legend-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
+    .legend-swatch.current { background: #4f8df5; }
+    .legend-swatch.history { background: #f0ad4e; }
+    /* ==== Tree grid and rows ==== */
+    /* Header and rows share --columns; only the name cell is indented per depth. */
+    .tree-head, .row { --columns: minmax(260px, 1.5fr) minmax(180px, 1fr) 176px 64px 132px; }
+    /* Tenant address beside "Library / folder": the rows' /sites/... paths continue from it. Kept as typed (no caps). */
+    .head-tenant { margin-left: 10px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .head-tenant:empty { display: none; }
+    .tree-head { display: grid; grid-template-columns: var(--columns); gap: 16px; align-items: center; padding: 10px 24px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    /* Sortable column headers: look like header text; the active one is brighter and shows ↓/↑. */
+    .head-sort { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 2px 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+    .head-sort:hover, .head-sort:focus-visible { color: var(--text); outline: none; }
+    .head-sort.active { color: var(--text); }
+    .head-sort:disabled { cursor: default; color: inherit; }
+    .sort-arrow { width: 10px; text-align: center; letter-spacing: 0; }
+    .num .head-sort { justify-content: flex-end; }
+    /* Legend in the bar column's header: normal case and weight, so it reads as a key, not a title. */
+    .head-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; }
+    #tree { --tree-pad: 12px; padding: 4px var(--tree-pad) 12px; }
+    /* Rows are <details>/<summary>; .caret replaces the native marker. */
+    .node { margin: 2px 0; }
+    .node summary { list-style: none; }
+    .node summary::-webkit-details-marker { display: none; }
+    .num { text-align: right; }
+    .row { display: grid; grid-template-columns: var(--columns); gap: 16px; align-items: center; min-height: 46px; padding: 8px 12px; border-radius: 10px; }
+    .node summary.row { cursor: pointer; }
+    .row:hover { background: var(--surface-2); }
+    /* An opened library's contents sit in a recessed tray across the full panel width, as if the
+       list split open, with a lit 1px edge at the bottom. Negative margins reach the panel edges;
+       matching padding keeps the rows (and their columns) exactly where they were. */
+    #tree > details.node[open] > .children {
+      margin: 0 calc(-1 * var(--tree-pad)) 8px;
+      padding: 8px var(--tree-pad);
+      background: var(--well-bg);
+      /* The 1px lit edge is listed first so it paints over its soft 4px glow. */
+      box-shadow: inset 0 -1px 0 var(--well-edge), inset 0 -5px 4px -4px var(--well-glow);
+    }
+    #tree > details.node[open] .row:hover { background: var(--well-hover); }
+    /* Bar track inside the tray: darker than the tray in light theme so empty space reads as track. */
+    #tree > details.node[open] > .children .bar-track { background: var(--well-track); }
+    /* Library rows are full-width bands, open or closed, so the pointer highlight has the same
+       shape as an opened library. The extra padding keeps their columns in line. */
+    #tree > details.node > summary.row {
+      margin: 0 calc(-1 * var(--tree-pad));
+      padding-left: calc(12px + var(--tree-pad)); padding-right: calc(12px + var(--tree-pad));
+      border-radius: 0;
+    }
+    /* The opened library's row stays pinned at the top while its contents scroll under it, and
+       casts the tray's soft top shadow, so the shadow follows it while pinned. */
+    #tree > details.node[open] > summary.row {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--surface);
+      box-shadow: 0 5px 4px -4px var(--well-shade);
+    }
+    #tree > details.node[open] > summary.row:hover { background: var(--surface-2); }
+    /* clip, not hidden: hidden would make the panel a scroll container and stop the row pinning. */
+    .tree-panel { overflow: clip; }
+    .name-cell { min-width: 0; display: flex; align-items: center; gap: 9px; }
+    .caret { display: inline-grid; place-items: center; width: 16px; color: #83909d; transition: transform .15s ease; flex: 0 0 16px; }
+    details[open] > summary .caret { transform: rotate(90deg); }
+    /* Kind icons: folder (default), library and file. */
+    /* Folder and file tiles sit in the opened-library tray (#eff3f8), so their light backgrounds are a step
+       darker than the tray; library tiles sit on the white list. */
+    .icon { width: 27px; height: 27px; display: inline-grid; place-items: center; border-radius: 8px; background: #d9e6fb; color: var(--accent); flex: 0 0 27px; font-size: 14px; }
+    .icon.library { background: #fff5df; color: #a86b00; }
+    .icon.file { background: #dce3eb; color: #526273; }
+    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 670; }
+    .node[data-kind="file"] .name { font-size: 12px; font-weight: 450; }
+    .subname { display: block; color: var(--muted); font-size: 11px; font-weight: 450; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .meta { color: var(--muted); font-size: 12px; }
+    /* ==== Size column ==== */
+    /* Main figure is Storage used; .size-main.muted is a provisional Graph size. */
+    .size { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; text-align: right; white-space: nowrap; }
+    .size-main { display: block; }
+    .size-main.muted { color: var(--muted); font-weight: 600; }
+    /* Swatch + fixed value column, so swatches and numbers line up from row to row. */
+    .size-line { display: grid; grid-template-columns: auto 64px; justify-content: end; align-items: center; column-gap: 6px; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .size-line-label { display: inline-flex; align-items: center; gap: 5px; }
+    .size-line .legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
+    .size-note { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+    /* "Size failed - Retry" link, shown when a size lookup failed. */
+    .metric-retry { margin-top: 4px; border: 0; padding: 2px 0; color: var(--accent); background: transparent; font-size: 10px; cursor: pointer; }
+    .metric-retry:hover { text-decoration: underline; }
+    /* File-count column. */
+    .count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; text-align: right; }
+    /* ==== Bars ==== */
+    /* One global scale (largest library = 100%); .partial = only current size known. */
+    .bar-cell { display: flex; align-items: center; min-width: 0; }
+    .bar-track { height: 12px; background: var(--track); border-radius: 99px; overflow: hidden; flex: 1; }
+    .bar-fill { display: flex; height: 100%; min-width: 0; border-radius: inherit; overflow: hidden; }
+    .bar-fill.partial { opacity: .5; }
+    .bar-segment.full { width: 100%; }
+    .bar-segment { display: block; height: 100%; min-width: 0; }
+    .bar-segment.current { background: linear-gradient(90deg, #4f8df5, #78a9ff); }
+    .bar-segment.history { background: linear-gradient(90deg, #e99b32, #f4c16e); }
+    /* ==== Row actions: Open, Rename, Copy, Move ==== */
+    .row-actions { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+    /* Icon buttons (Open, Rename, Copy, Move) with a quick tooltip from data-tip. Tooltips open
+       above, anchored right so they never pass the panel edge; on library rows, which pin to
+       the top, they open below. */
+    .open-link, .item-action { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+    .open-link { color: var(--accent); }
+    .item-action { color: var(--muted); }
+    .open-link:hover, .item-action:hover, .open-link:focus-visible, .item-action:focus-visible { color: var(--accent); background: var(--surface-2); outline: none; }
+    .item-action:disabled { opacity: .45; cursor: wait; }
+    .action-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    [data-tip] { position: relative; }
+    [data-tip]::after {
+      content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5;
+      padding: 4px 8px; border-radius: 6px; background: var(--text); color: var(--surface);
+      font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; pointer-events: none;
+      opacity: 0; transform: translateY(2px); transition: opacity .12s ease, transform .12s ease;
+    }
+    [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; transform: none; transition-delay: .25s; }
+    #tree > details > summary [data-tip]::after { bottom: auto; top: calc(100% + 6px); transform: translateY(-2px); }
+    /* ==== Copy / Move dialog (destination folder picker) ==== */
+    dialog { width: min(560px, calc(100vw - 28px)); max-height: min(680px, calc(100vh - 36px)); padding: 0; border: 1px solid var(--border); border-radius: 16px; color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
+    dialog::backdrop { background: rgba(5, 12, 19, .62); }
+    .picker { display: flex; flex-direction: column; max-height: min(680px, calc(100vh - 36px)); }
+    .picker-header, .picker-footer { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    .picker-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+    .picker-title { margin: 0 0 5px; font-size: 18px; }
+    .picker-hint, .picker-path { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .picker-close { width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+    /* The dialog focuses × on open; show that as a quiet highlight, not a ring. */
+    .picker-close:focus { outline: none; }
+    .picker-close:hover, .picker-close:focus-visible { background: var(--surface-2); color: var(--text); }
+    .picker-controls { display: flex; gap: 8px; align-items: center; padding: 10px 14px 8px; }
+    .picker-path { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .picker-folders { overflow: auto; min-height: 130px; padding: 0 12px 12px; }
+    .picker-folder { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-radius: 7px; padding: 9px 10px; color: var(--text); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+    .picker-folder .action-icon { flex: 0 0 auto; color: var(--accent); }
+    .picker-folder .action-icon:last-child { margin-left: auto; color: var(--muted); }
+    .picker-folder:hover { background: var(--surface-2); }
+    .picker-message { padding: 14px 8px; color: var(--muted); font-size: 12px; }
+    .picker-footer { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); border-bottom: 0; }
+    .picker-button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; color: var(--text); background: var(--surface-2); font: inherit; cursor: pointer; }
+    .picker-button.primary { border-color: transparent; color: white; background: var(--accent-2); font-weight: 700; }
+    .picker-button:disabled { opacity: .5; cursor: wait; }
+    /* ==== Trim old versions dialog (reuses the picker frame) ==== */
+    .picker-button.danger { border-color: transparent; color: white; background: var(--danger-solid); font-weight: 700; }
+    .picker-button.danger:disabled { cursor: not-allowed; }
+    .picker-footer .spacer { flex: 1; }
+    .trim-url { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+    /* Trim-queue badge under a library's URL; a button that opens the trim dialog. */
+    .trim-badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; padding: 1px 8px; border: 1px solid var(--queue-border); border-radius: 999px; color: var(--queue-text); background: var(--queue-bg); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .trim-badge.static { margin-top: 0; cursor: default; }
+    /* Library URL line; a trim badge sits at its end. */
+    .subline { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .subline .subname { min-width: 0; }
+    .subline .trim-badge { flex: 0 0 auto; margin-top: 0; }
+    .trim-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .trim-badge.running::before { animation: queue-pulse 1.4s ease-in-out infinite; }
+    .trim-badge.done { color: var(--done-text); background: var(--done-bg); border-color: var(--done-border); }
+    .trim-badge.failed { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }
+    .trim-badge.stopped { color: var(--muted); background: var(--surface-2); border-color: var(--border); }
+    @keyframes queue-pulse { 50% { opacity: .25; } }
+    @media (prefers-reduced-motion: reduce) { .trim-badge.running::before { animation: none; } }
+    /* Taller than the folder picker, so the warning and confirmation fit without scrolling on most screens. */
+    #trimDialog, #trimDialog .picker { max-height: min(860px, calc(100vh - 36px)); }
+    .trim-body { display: grid; gap: 12px; overflow: auto; padding: 12px 18px 14px; font-size: 13px; }
+    .trim-label { margin-bottom: 6px; padding: 0; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .trim-last-text { line-height: 1.5; }
+    .trim-last-text .trim-state { font-weight: 700; }
+    .trim-last-text .muted { color: var(--muted); }
+    .trim-last-text .trim-job-error { color: var(--danger); }
+    .trim-rules { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+    .trim-rule { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+    .trim-rule:has(input[type="radio"]:checked) { border-color: var(--accent); background: var(--surface-2); }
+    .trim-rule input[type="radio"] { margin: 3px 0 0; accent-color: var(--accent); }
+    .trim-rule > span { display: grid; gap: 5px; min-width: 0; }
+    .trim-rule-note { color: var(--muted); font-size: 12px; }
+    .trim-inputs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .trim-number, .trim-confirm input { border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; color: var(--text); background: var(--surface); font: inherit; }
+    .trim-number { width: 92px; }
+    .trim-number:focus, .trim-confirm input:focus { outline: none; border-color: #83aef7; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+    .trim-input-error { color: var(--danger); font-size: 12px; }
+    .trim-input-error:empty { display: none; }
+    .trim-warning { padding: 10px 12px; border: 1px solid var(--danger-border); border-radius: 10px; color: var(--danger); background: var(--danger-bg); line-height: 1.5; }
+    .trim-confirm { display: grid; gap: 6px; }
+    .trim-confirm code { padding: 1px 5px; border-radius: 5px; background: var(--surface-2); font-weight: 700; }
+    /* ==== Notes inside an opened folder ==== */
+    /* Status notes and "Show 200 more"; the script sets their left margin. */
+    .child-note { color: var(--muted); font-size: 12px; padding: 6px 0 8px; }
+    .load-more-button { margin: 6px 0 10px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--accent); background: var(--surface); cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
+    .load-more-button:disabled { opacity: .6; cursor: wait; }
+    /* ==== Search results: replace the tree (and its header and footnote) while a search is open ==== */
+    .tree-panel.searching .tree-head, .tree-panel.searching #tree, .tree-panel.searching > .notice,
+    .tree-panel.searching .toolbar .narrow-only { display: none; }
+    .search-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 16px 0; }
+    .search-summary { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .search-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    /* Same grid idea as the tree: header and rows share --columns. */
+    .search-head, .search-row { --columns: minmax(220px, 1.3fr) minmax(160px, 1fr) 96px 120px 64px; }
+    .search-head { display: grid; grid-template-columns: var(--columns); gap: 16px; padding: 10px 24px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    #searchResults { padding: 4px 12px 8px; }
+    .search-row { min-height: 42px; }
+    .search-row .name { font-weight: 600; }
+    .search-row .size { font-weight: 600; }
+    .search-row .row-actions { justify-content: flex-end; }
+    /* A greyed "Show in tree" means the item's library isn't in the tree; it is not busy. */
+    .search-row .item-action:disabled { cursor: not-allowed; }
+    .search-where { min-width: 0; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .search-foot { padding: 0 24px 6px; }
+    .search-foot:empty { display: none; }
+    .search-error { padding: 10px 12px; color: var(--danger); font-size: 13px; }
+    /* The row "Show in tree" lands on: a short highlight that fades out. Works on both themes. */
+    .row.flash { animation: row-flash 2.4s ease-out; }
+    @keyframes row-flash {
+      0%, 35% { background: rgba(79, 141, 245, .22); box-shadow: inset 0 0 0 1px rgba(79, 141, 245, .6); }
+      100% { background: transparent; box-shadow: none; }
+    }
+    /* Empty-tree message (still loading, or no search matches). */
+    .empty { padding: 54px 22px; text-align: center; color: var(--muted); }
+    .empty-icon { font-size: 32px; margin-bottom: 9px; }
+    .empty strong { display: block; color: var(--text); font-size: 17px; margin-bottom: 4px; }
+    /* Footnote at the bottom of the tree panel. */
+    .notice { padding: 9px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+    .notice summary { width: max-content; cursor: pointer; font-weight: 650; }
+    .notice summary:hover { color: var(--text); }
+    .notice[open] summary { margin-bottom: 6px; }
+    /* Status line above the summary: errors in red, .success in green. */
+    .status { color: #a13c22; font-size: 12px; padding: 0 3px; }
+    .status.success { color: #197244; }
+    /* ==== Narrow screens (max-width: 900px) ==== */
+    /* Header and toolbar stack; rows become a two-column grid. */
+    @media (max-width: 900px) {
+      .shell { padding: 25px 14px 38px; }
+      .hero { display: block; }
+      .service-actions { margin-top: 14px; justify-content: flex-start; }
+      .scan-meta { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .toolbar { align-items: stretch; flex-direction: column; }
+      .search-group { max-width: none; }
+      .legend { justify-content: flex-start; }
+      .toolbar .narrow-only { display: flex; }
+      .tree-head { display: none; }
+      #tree { --tree-pad: 4px; padding: 4px var(--tree-pad) 10px; }
+      .row { grid-template-columns: minmax(0, 1fr) 112px; gap: 4px 10px; padding: 8px; }
+      .name-cell { grid-column: 1 / -1; }
+      .bar-cell { grid-column: 1; }
+      .size { grid-column: 2; }
+      .count { display: none; }
+      .row-actions { grid-column: 1 / -1; }
+      /* Search results: name and location on their own lines, then size and date. */
+      .search-head { display: none; }
+      .search-row .name-cell, .search-row .search-where { grid-column: 1 / -1; }
+      .search-row .size { grid-column: 1; text-align: left; }
+      .search-row .count { display: block; grid-column: 2; }
+      .search-row .row-actions { justify-content: flex-start; }
+    }
+    /* ==== Dark theme ==== */
+    /* Two copies that MUST stay in sync: this media query (System on a dark OS,
+       unless Light is chosen) and :root[data-theme="dark"] below (explicit Dark). */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { color-scheme: dark; --bg:#111820; --surface:#19232d; --surface-2:#202c38; --text:#eef4fa; --muted:#9eacba; --border:#2b3947; --accent:#78a9ff; --accent-2:#4d83df; --track:#2d3b49; --shadow:0 16px 44px rgba(0,0,0,.2); --well-bg:#131b24; --well-shade:rgba(0,0,0,.45); --well-edge:rgba(255,255,255,.10); --well-glow:rgba(255,255,255,.09); --well-hover:#1a2430; --well-track:#2d3b49; }
+      :root:not([data-theme="light"]) body { background: radial-gradient(1000px 500px at 10% -10%, #1b3152 0%, transparent 65%), var(--bg); }
+      :root:not([data-theme="light"]) .badge { background:#172840; color:#a8c8ff; border-color:#2c4a76; }
+      :root:not([data-theme="light"]) .scan-panel.done .scan-title::before { color:#70d59c; }
+      :root:not([data-theme="light"]) .scan-errors { color:#f4c16e; }
+      :root:not([data-theme="light"]) .icon { background:#20314a; }
+      :root:not([data-theme="light"]) .icon.library { background:#3a2c17; color:#f3c66c; }
+      :root:not([data-theme="light"]) .icon.file { background:#29333e; color:#b4c2d0; }
+      :root:not([data-theme="light"]) { --danger:#ffa094; --danger-bg:#2a1719; --danger-border:#5c2b2b; --danger-solid:#c2362b; --queue-text:#a8c8ff; --queue-bg:#172840; --queue-border:#2c4a76; --done-text:#70d59c; --done-bg:#12291d; --done-border:#24513a; }
+    }
+    /* Explicit Dark choice: a copy of the rules above. Keep both in sync. */
+    :root[data-theme="dark"] { color-scheme: dark; --bg:#111820; --surface:#19232d; --surface-2:#202c38; --text:#eef4fa; --muted:#9eacba; --border:#2b3947; --accent:#78a9ff; --accent-2:#4d83df; --track:#2d3b49; --shadow:0 16px 44px rgba(0,0,0,.2); --well-bg:#131b24; --well-shade:rgba(0,0,0,.45); --well-edge:rgba(255,255,255,.10); --well-glow:rgba(255,255,255,.09); --well-hover:#1a2430; --well-track:#2d3b49; }
+    :root[data-theme="dark"] body { background: radial-gradient(1000px 500px at 10% -10%, #1b3152 0%, transparent 65%), var(--bg); }
+    :root[data-theme="dark"] .badge { background:#172840; color:#a8c8ff; border-color:#2c4a76; }
+    :root[data-theme="dark"] .scan-panel.done .scan-title::before { color:#70d59c; }
+    :root[data-theme="dark"] .scan-errors { color:#f4c16e; }
+    :root[data-theme="dark"] .icon { background:#20314a; }
+    :root[data-theme="dark"] .icon.library { background:#3a2c17; color:#f3c66c; }
+    :root[data-theme="dark"] .icon.file { background:#29333e; color:#b4c2d0; }
+    :root[data-theme="dark"] { --danger:#ffa094; --danger-bg:#2a1719; --danger-border:#5c2b2b; --danger-solid:#c2362b; --queue-text:#a8c8ff; --queue-bg:#172840; --queue-border:#2c4a76; --done-text:#70d59c; --done-bg:#12291d; --done-border:#24513a; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <!-- Header: title, switches, service badge, Stop app -->
+    <header class="hero">
+      <div>
+        <div class="eyebrow" id="tenantLabel">SharePoint Online</div>
+        <h1>SharePoint Navigator<span class="app-version" id="appVersion" hidden>__APP_VERSION__</span></h1>
+      </div>
+      <div class="service-actions">
+        <!-- Theme switch (setTheme) -->
+        <div class="segmented" id="themeSwitch" role="group" aria-label="Theme" data-i18n-aria="theme.label">
+          <button type="button" data-theme-choice="light" data-i18n="theme.light">Light</button>
+          <button type="button" data-theme-choice="dark" data-i18n="theme.dark">Dark</button>
+          <button type="button" data-theme-choice="system" data-i18n="theme.system">System</button>
+        </div>
+        <!-- Language switch (setLanguage) -->
+        <div class="segmented" id="langSwitch" role="group" aria-label="Language" data-i18n-aria="lang.label">
+          <button type="button" data-lang-choice="en" lang="en">EN</button>
+          <button type="button" data-lang-choice="ko" lang="ko">한국어</button>
+        </div>
+        <!-- Service badge (setBadge) -->
+        <div class="badge" id="serviceBadge" title="The app runs only on this computer." data-i18n-title="badge.title">Connecting…</div>
+        <button class="button hidden" id="stopServiceButton" type="button" data-i18n="button.stop">Stop app</button>
+      </div>
+    </header>
+
+    <!-- Loading panel; class "done" collapses it to one line -->
+    <section class="panel scan-panel" id="scanPanel" aria-label="Library loading progress" data-i18n-aria="scan.aria">
+      <div class="scan-top">
+        <div>
+          <div class="scan-title" id="scanTitle">Connecting to SharePoint…</div>
+          <div class="scan-message" id="scanMessage">Libraries load first. Open one to see its folders and sizes.</div>
+          <div class="scan-errors" id="scanErrors" hidden></div>
+        </div>
+        <div class="scan-percent" id="scanPercent">0%</div>
+      </div>
+      <div class="scan-track" role="progressbar" aria-label="Sites read" data-i18n-aria="scan.trackAria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="scan-fill" id="scanFill"></div></div>
+      <div class="scan-meta">
+        <span id="scanCounter"></span>
+        <div class="actions">
+          <button class="button primary" id="refreshReportButton" type="button" disabled data-i18n="button.reload">Reload libraries</button>
+          <button class="button" id="collapseButton" type="button" disabled data-i18n="button.collapse">Collapse all</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Status line -->
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <!-- Summary strip (updateStats) -->
+    <section class="stats" id="stats" aria-label="Storage summary" data-i18n-aria="stats.aria">
+      <div class="stat"><div class="stat-label" data-i18n="stats.used">Storage used</div><div class="stat-value" id="usedTotal">—</div><div class="stat-note" id="usedNote"></div></div>
+      <div class="stat"><div class="stat-label" data-i18n="stats.history">Version history</div><div class="stat-value" id="historyTotal">—</div><div class="stat-note" id="historyNote"></div></div>
+      <!-- Trims: opens the Trims pane below (updateTrimQueueStat) -->
+      <button class="stat stat-toggle" id="trimQueueStat" type="button" aria-expanded="false" aria-controls="trimPanel"><div class="stat-label" data-i18n="stats.trims">Trims</div><div class="stat-value" id="trimQueueCount">—</div><div class="stat-note" id="trimQueueNote"></div></button>
+    </section>
+    <!-- Trims pane: active trims and ones that ended in the last 7 days; closed by default -->
+    <section class="panel trims-panel" id="trimPanel" hidden aria-labelledby="trimPanelTitle">
+      <div class="trims-head">
+        <div><strong id="trimPanelTitle" data-i18n="trims.title">Trims</strong><span class="trims-hint" id="trimPanelHint"></span></div>
+        <button class="button" id="trimQueueButton" type="button" disabled data-i18n="trims.check">Check again</button>
+      </div>
+      <div class="trims-list" id="trimList"></div>
+    </section>
+
+    <!-- Tree panel: toolbar, column header, tree, footnote -->
+    <section class="panel tree-panel" aria-label="SharePoint folder tree" data-i18n-aria="tree.aria">
+      <div class="toolbar">
+        <div class="search-group">
+          <label class="search-wrap">
+            <span aria-hidden="true">⌕</span>
+            <input class="search" id="search" type="search" placeholder="Search all libraries (press Enter)" data-i18n-placeholder="search.placeholder" autocomplete="off" disabled>
+          </label>
+          <button class="button primary" id="searchButton" type="button" disabled data-i18n="search.button">Search</button>
+        </div>
+        <label class="sort-control narrow-only" for="sortBy"><span data-i18n="sort.label">Sort</span>
+          <span class="sort-wrap"><select class="sort-select" id="sortBy" disabled>
+            <option value="size-desc" data-i18n="sort.sizeDesc">Largest size</option>
+            <option value="size-asc" data-i18n="sort.sizeAsc">Smallest size</option>
+            <option value="name-asc" data-i18n="sort.nameAsc">Name A–Z</option>
+            <option value="name-desc" data-i18n="sort.nameDesc">Name Z–A</option>
+            <option value="files-desc" data-i18n="sort.filesDesc">Most files</option>
+            <option value="files-asc" data-i18n="sort.filesAsc">Fewest files</option>
+          </select></span>
+        </label>
+        <div class="legend narrow-only" aria-label="Bar chart legend" data-i18n-aria="legend.aria">
+          <span class="legend-item"><i class="legend-swatch current"></i><span data-i18n="legend.current">Current files</span></span>
+          <span class="legend-item"><i class="legend-swatch history"></i><span data-i18n="legend.history">Version history</span></span>
+        </div>
+      </div>
+      <!-- Search results (runSearch): shown instead of the tree while a search is open -->
+      <div class="search-view" id="searchView" hidden>
+        <div class="search-top">
+          <button class="button" id="searchBack" type="button" data-i18n="search.back">← Back to libraries</button>
+          <span class="search-summary" id="searchSummary" aria-live="polite"></span>
+        </div>
+        <!-- Filters; changing one searches again. Values are the service's choice names. -->
+        <div class="search-filters">
+          <label class="sort-control"><span data-i18n="search.scope">Where</span>
+            <span class="sort-wrap"><select class="sort-select" id="searchScope"></select></span></label>
+          <label class="sort-control"><span data-i18n="search.type">Type</span>
+            <span class="sort-wrap"><select class="sort-select" id="searchType">
+              <option value="all" data-i18n="search.typeAll">Everything</option>
+              <option value="folders" data-i18n="search.typeFolders">Folders</option>
+              <option value="files" data-i18n="search.typeFiles">Files</option>
+              <option value="office" data-i18n="search.typeOffice">Word, Excel, PowerPoint</option>
+              <option value="pdf" data-i18n="search.typePdf">PDF</option>
+              <option value="images" data-i18n="search.typeImages">Images</option>
+              <option value="video" data-i18n="search.typeVideo">Video and audio</option>
+              <option value="archives" data-i18n="search.typeArchives">Zip and archives</option>
+            </select></span></label>
+          <label class="sort-control"><span data-i18n="search.size">Size</span>
+            <span class="sort-wrap"><select class="sort-select" id="searchSize">
+              <option value="any" data-i18n="search.sizeAny">Any size</option>
+              <option value="10mb" data-i18n="search.size10mb">Over 10 MB</option>
+              <option value="100mb" data-i18n="search.size100mb">Over 100 MB</option>
+              <option value="1gb" data-i18n="search.size1gb">Over 1 GB</option>
+            </select></span></label>
+          <label class="sort-control"><span data-i18n="search.modified">Modified</span>
+            <span class="sort-wrap"><select class="sort-select" id="searchModified">
+              <option value="any" data-i18n="search.modifiedAny">Any time</option>
+              <option value="30d" data-i18n="search.modified30d">In the last 30 days</option>
+              <option value="1y" data-i18n="search.modified1y">Over a year ago</option>
+              <option value="3y" data-i18n="search.modified3y">Over 3 years ago</option>
+            </select></span></label>
+          <label class="sort-control"><span data-i18n="sort.label">Sort</span>
+            <span class="sort-wrap"><select class="sort-select" id="searchSort">
+              <option value="relevance" data-i18n="search.sortRelevance">Best match</option>
+              <option value="size" data-i18n="search.sortSize">Largest first</option>
+              <option value="newest" data-i18n="search.sortNewest">Newest first</option>
+              <option value="oldest" data-i18n="search.sortOldest">Oldest first</option>
+            </select></span></label>
+        </div>
+        <div class="search-head">
+          <div data-i18n="search.colName">Name</div><div data-i18n="search.colWhere">Location</div>
+          <div class="num" data-i18n="search.colSize">Size</div><div class="num" data-i18n="search.colModified">Modified</div><div></div>
+        </div>
+        <div id="searchResults"></div>
+        <div class="search-foot" id="searchFoot"></div>
+        <div class="notice" data-i18n="search.note">Results come from SharePoint's search index, so very recent changes can take a few minutes to appear. Only items you can open are listed, and folder sizes aren't shown here.</div>
+      </div>
+      <!-- Column header (same grid as the rows). Name, Storage used and Files sort on click (setSort);
+           the bar column's header is the colour legend, with the bar scale in its tooltip. -->
+      <div class="tree-head">
+        <div><button type="button" class="head-sort" data-sort-key="name" disabled><span data-i18n="head.name">Library / folder</span><span class="sort-arrow" aria-hidden="true"></span></button><span class="head-tenant" id="headTenant"></span></div>
+        <div class="head-legend" aria-label="Bar chart legend" data-i18n-aria="legend.aria" data-i18n-title="legend.scale" title="Bar = storage used · largest library = 100%">
+          <span class="legend-item"><i class="legend-swatch current"></i><span data-i18n="legend.current">Current files</span></span>
+          <span class="legend-item"><i class="legend-swatch history"></i><span data-i18n="legend.history">Version history</span></span>
+        </div>
+        <div class="num"><button type="button" class="head-sort" data-sort-key="size" disabled><span class="sort-arrow" aria-hidden="true"></span><span data-i18n="head.used">Storage used</span></button></div>
+        <div class="num"><button type="button" class="head-sort" data-sort-key="files" disabled><span class="sort-arrow" aria-hidden="true"></span><span data-i18n="head.files">Files</span></button></div>
+        <div></div>
+      </div>
+      <!-- Filled by render(); placeholder until libraries arrive -->
+      <div id="tree">
+        <div class="empty"><div class="empty-icon">🗂️</div><strong data-i18n="empty.loadingTitle">Loading libraries…</strong><span data-i18n="empty.loadingText">Each site's Documents library appears here as soon as it's read.</span></div>
+      </div>
+      <details class="notice"><summary data-i18n="notice.title">About these numbers</summary><div data-i18n="notice">Opening a library or folder shows what's directly inside it, 200 items at a time. Folder sizes include everything inside them; file sizes are the latest version only. SharePoint can take a few minutes to reflect recent changes.</div></details>
+    </section>
+    <!-- Copy / Move dialog (openTransferPicker) -->
+    <dialog id="transferDialog" aria-labelledby="transferTitle">
+      <div class="picker">
+        <div class="picker-header">
+          <div><h2 class="picker-title" id="transferTitle">Choose a receiving folder</h2><div class="picker-hint" id="transferHint"></div></div>
+          <button class="picker-close" id="transferClose" type="button" aria-label="Close" data-i18n-aria="picker.close">×</button>
+        </div>
+        <div class="picker-controls">
+          <button class="item-action" id="transferUp" type="button"></button>
+          <div class="picker-path" id="transferPath"></div>
+        </div>
+        <div class="picker-folders" id="transferFolders"></div>
+        <div class="picker-footer">
+          <button class="picker-button" id="transferCancel" type="button" data-i18n="picker.cancel">Cancel</button>
+          <button class="picker-button" id="transferMore" type="button" hidden data-i18n="picker.more">Load more folders</button>
+          <button class="picker-button primary" id="transferChoose" type="button" data-i18n="picker.choose">Choose this folder</button>
+        </div>
+      </div>
+    </dialog>
+    <!-- Trim old versions dialog (openTrimDialog): one site, every library in it -->
+    <dialog id="trimDialog" aria-labelledby="trimTitle">
+      <div class="picker">
+        <div class="picker-header">
+          <div><h2 class="picker-title" id="trimTitle" data-i18n="trim.title">Trim old versions</h2><div class="picker-hint" id="trimHint"></div></div>
+          <button class="picker-close" id="trimClose" type="button" aria-label="Close" data-i18n-aria="picker.close">×</button>
+        </div>
+        <div class="trim-body">
+          <!-- Latest trim on this site (renderTrimDialog) -->
+          <section aria-live="polite">
+            <div class="trim-label" data-i18n="trim.lastHeading">Last trim on this site</div>
+            <div class="trim-last-text" id="trimLast"></div>
+          </section>
+          <!-- The three rules SharePoint offers -->
+          <fieldset class="trim-rules" id="trimRules">
+            <legend class="trim-label" data-i18n="trim.ruleHeading">What to delete</legend>
+            <label class="trim-rule"><input type="radio" name="trimMode" value="automatic" checked>
+              <span><strong data-i18n="trim.autoName">Automatic (recommended)</strong>
+                <span class="trim-rule-note" data-i18n="trim.autoNote">SharePoint decides by age: recent versions stay, older ones are thinned out, and the oldest are deleted.</span></span></label>
+            <label class="trim-rule"><input type="radio" name="trimMode" value="days">
+              <span><strong data-i18n="trim.daysName">Delete versions older than</strong>
+                <span class="trim-inputs"><input class="trim-number" id="trimDays" type="number" min="30" max="36500" step="1" value="180"><span data-i18n="trim.daysUnit">days</span></span>
+                <span class="trim-rule-note" data-i18n="trim.daysNote">At least 30 days. Newer versions are kept.</span></span></label>
+            <label class="trim-rule"><input type="radio" name="trimMode" value="count">
+              <span><strong data-i18n="trim.countName">Keep a set number of versions</strong>
+                <span class="trim-inputs"><span data-i18n="trim.countMajor">Versions to keep per file</span><input class="trim-number" id="trimMajor" type="number" min="1" max="50000" step="1" value="100"></span>
+                <span class="trim-inputs"><span data-i18n="trim.countMinor">Keep draft (minor) versions for the newest</span><input class="trim-number" id="trimMinor" type="number" min="0" max="50000" step="1" value="0"></span>
+                <span class="trim-rule-note" data-i18n="trim.countNote">Each file keeps its newest versions up to this number; older ones are deleted.</span></span></label>
+          </fieldset>
+          <div class="trim-input-error" id="trimInputError" role="alert"></div>
+          <div class="trim-warning" data-i18n="trim.warning">Trimmed versions are deleted permanently and don't go to the recycle bin. Current files stay as they are, and versions under a retention hold are kept. The trim covers every library in this site, runs in the background, and can take hours.</div>
+          <!-- Typing the site's short name unlocks Start trim -->
+          <label class="trim-confirm"><span id="trimConfirmLabel"></span><input id="trimConfirm" type="text" autocomplete="off" spellcheck="false"></label>
+        </div>
+        <div class="picker-footer">
+          <button class="picker-button" id="trimRefresh" type="button" data-i18n="trim.refresh">Check again</button>
+          <span class="spacer"></span>
+          <button class="picker-button" id="trimStop" type="button" hidden data-i18n="trim.stop">Stop trim</button>
+          <button class="picker-button" id="trimCancel" type="button" data-i18n="trim.close">Close</button>
+          <button class="picker-button danger" id="trimStart" type="button" disabled data-i18n="trim.start">Start trim</button>
+        </div>
+      </div>
+    </dialog>
+  </main>
+
+  <!-- Main application script -->
+  <script>
+    /*
+     * SharePoint Navigator: page script
+     *
+     * A local Python service (http://127.0.0.1:8765/) serves this page and fills
+     * in `serviceToken` with a per-run token, sent as X-Local-Token on every call.
+     *
+     * Flow: checkLocalService() (GET /api/status) -> loadLatestReport() (POST
+     * /api/scan, poll /api/progress for library-root rows) -> loadRecords() builds
+     * `roots` (sites -> libraries). render() shows libraries at the top level.
+     *
+     * Opening a folder loads its DIRECT children (/api/folder-children), 200 at a
+     * time ("Show 200 more"). Nothing is loaded recursively.
+     *
+     * Sizes: visible rows without one are queued for /api/storage-metric, 4 at a
+     * time. storageMetricGeneration is bumped on reload, rename and copy/move;
+     * results from an older generation are discarded.
+     *   Storage used     TotalSize (sizeBytes), including version history
+     *   Current files    TotalFileStreamSize (currentFileBytes)
+     *   Version history  the difference (historyOtherEstimateBytes)
+     *   sharePointMetric is the raw metric; graphCurrentBytes is a provisional size.
+     *
+     * Bars: one global scale, the largest library = 100% at every depth.
+     * Auto-stop: an EventSource to /api/session-events; the service stops itself
+     * when the last tab closes. Theme and language are kept in localStorage.
+     */
+    (() => {
+      // ---- DOM shortcuts ----
+      const $ = (id) => document.getElementById(id);
+      const treeEl = $('tree');
+      const searchEl = $('search');
+      const sortEl = $('sortBy');
+      const serviceBadge = $('serviceBadge');
+      const stopServiceButton = $('stopServiceButton');
+      const refreshReportButton = $('refreshReportButton');
+      // ---- State ----
+      // Site nodes -> library nodes -> folders/files (see makeNode).
+      let roots = [];
+      // True once a tree has been built.
+      let loaded = false;
+      // Service reachable and signed in.
+      let serviceOnline = false;
+      // Keys (kind|siteUrl|path) of open rows, so render() can reopen them.
+      let expandedNodeKeys = new Set();
+      // Scan polling: stream cursor, all rows so far, and a re-entry guard.
+      let scanCursor = 0;
+      let scanRecords = [];
+      let scanRunning = false;
+      // Size lookups, keyed by storageMetricKey(node). storageMetricNodes maps a key
+      // to the live node, so a result lands correctly even after a rebuild.
+      const storageMetricCache = new Map();
+      const storageMetricPending = new Set();
+      const storageMetricErrors = new Map();
+      const storageMetricQueue = [];
+      const storageMetricNodes = new Map();
+      // Max size lookups in flight.
+      const STORAGE_METRIC_CONCURRENCY = 4;
+      // Slide-down for opened panes. folderChildrenKey → start time (null until the contents
+      // have arrived); redraws during the slide resume it at the same point.
+      const REVEAL_MS = 260;
+      const REVEAL_EASING = 'cubic-bezier(.22, .8, .24, 1)';
+      const revealStarts = new Map();
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // Closing slides up, starting gently and speeding up as the pane leaves (ease-in).
+      const CLOSE_MS = 200;
+      const CLOSE_EASING = 'cubic-bezier(.4, 0, 1, 1)';
+      // In-flight count, queue tie-breaker, and the batched re-render timer.
+      let storageMetricActive = 0;
+      let storageMetricQueueSequence = 0;
+      let storageMetricRenderTimer = 0;
+      // Folder listings (direct children, all pages), keyed by folderChildrenKey(node).
+      const folderChildrenCache = new Map();
+      const folderChildrenMore = new Map();
+      const folderChildrenPending = new Set();
+      const folderChildrenErrors = new Map();
+      // Bumped on reload, rename and copy/move; older async results are discarded.
+      let storageMetricGeneration = 0;
+      // Name-column indent per depth (px).
+      const INDENT_PX = 22;
+      // Global bar scale: the largest library (or largest size measured so far).
+      let barScaleBytes = 0;
+      // Scale's site name ('' if from largestMeasuredBytes); largest total seen.
+      let barScaleName = '';
+      let largestMeasuredBytes = 0;
+      // Site count from /api/status (until the scan reports one); skipped sites.
+      let knownSiteCount = 0;
+      let skippedSites = [];
+      // Filled in by the service; still starting with '__' means not served by it.
+      const serviceToken = '__LOCAL_SERVICE_TOKEN__';
+      // Show the version the service injected (still a placeholder when opened directly from disk).
+      const appVersionEl = document.getElementById('appVersion');
+      if (!appVersionEl.textContent.startsWith('__')) {
+        appVersionEl.textContent = 'v' + appVersionEl.textContent;
+        appVersionEl.hidden = false;
+      }
+
+      // ---- Language ----
+      // Phrase lists with shared keys; t() falls back to English, then the key.
+      const I18N = {
+        en: {
+          'theme.label': 'Theme', 'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.system': 'System', 'lang.label': 'Language',
+          'badge.title': 'The app runs only on this computer.', 'badge.connecting': 'Connecting…', 'badge.connected': '✓ Connected to SharePoint',
+          'badge.notConnected': '⚠ Not connected', 'badge.openFromApp': '⚠ Not connected · open this page from the app',
+          'badge.notRunning': '⚠ App not running', 'badge.stopped': 'Stopped',
+          'badge.stopFailed': "Couldn't stop the app. Press Ctrl+C in its Terminal window.", 'badge.renamed': '✓ Renamed in SharePoint · {name}',
+          'button.stop': 'Stop app', 'button.reload': 'Reload libraries', 'button.collapse': 'Collapse all',
+          'scan.aria': 'Library loading progress', 'scan.trackAria': 'Sites read',
+          'scan.connecting': 'Connecting to SharePoint…', 'scan.intro': 'Libraries load first. Open one to see its folders and sizes.',
+          'scan.loaded': 'Libraries loaded', 'scan.failed': "Couldn't load libraries", 'scan.loading': 'Loading libraries…',
+          'scan.reading': 'Reading {site}', 'scan.openHint': 'Open a library or folder to see its contents and sizes.', 'scan.connectingShort': 'Connecting…',
+          'scan.counter': '{done} of {total} sites · {libs} libraries', 'scan.counterOne': '{done} of {total} sites · 1 library',
+          'scan.skippedOne': 'Skipped 1 site: {items}', 'scan.skippedMany': 'Skipped {n} sites: {items}',
+          'scan.stoppedTitle': 'App stopped', 'scan.stoppedMsg': 'Run sharepoint-navigator.command to start it again.',
+          'scan.notRunningTitle': "The app isn't running", 'scan.notRunningMsg': 'Start it with sharepoint-navigator.command, then reload this page.',
+          'reason.noAccess': 'no access', 'reason.notFound': 'not found', 'reason.error': 'error', 'site.home': 'Home site',
+          'stats.aria': 'Storage summary', 'stats.used': 'Storage used',
+          'stats.history': 'Version history', 'stats.measured': '{m} of {n} measured', 'stats.historyShare': '{pct} of storage used',
+          'tree.aria': 'SharePoint folder tree', 'search.placeholder': 'Search all libraries (press Enter)',
+          'sort.label': 'Sort', 'sort.sizeDesc': 'Largest size', 'sort.sizeAsc': 'Smallest size', 'sort.nameAsc': 'Name A–Z', 'sort.nameDesc': 'Name Z–A', 'sort.filesDesc': 'Most files', 'sort.filesAsc': 'Fewest files', 'sort.next': 'Sort: {order}',
+          'legend.aria': 'Bar chart legend', 'legend.current': 'Current files', 'legend.history': 'Version history', 'legend.scale': 'Bar = storage used · largest library = 100%',
+          'head.name': 'Library / folder', 'head.used': 'Storage used', 'head.files': 'Files',
+          'empty.loadingTitle': 'Loading libraries…', 'empty.loadingText': "Each site's Documents library appears here as soon as it's read.",
+          'empty.noMatchTitle': 'No matching folders', 'empty.noMatchText': 'Try a different search.',
+          'notice': 'Opening a library or folder shows what\'s directly inside it, 200 items at a time. Storage used is everything SharePoint keeps for a folder: its current files plus their version history (and a little file information). File rows show the latest version only. SharePoint can take a few minutes to reflect recent changes.',
+          'bar.scale': '{pct} of the largest library', 'bar.scaleNamed': '{pct} of the largest library ({name})', 'bar.waiting': 'Waiting for library sizes',
+          'bar.split': 'Current files: {current} · Version history: {history} (plus a little file information) · {scale}',
+          'bar.currentOnly': 'Current files only; version history still loading · {scale}', 'bar.file': 'Latest version of this file · {scale}', 'size.versions': 'Version history', 'size.unavailable': 'Unavailable', 'size.retry': 'Size failed · Retry',
+          'size.currentLoading': 'Current files · loading version history…', 'size.loading': 'Loading…', 'row.openTitle': 'Open in SharePoint', 'row.rename': 'Rename', 'row.copy': 'Copy', 'row.move': 'Move',
+          'row.renameTitle': 'Rename {name}', 'row.copyTitle': 'Copy {name}', 'row.moveTitle': 'Move {name}',
+          'child.loading': 'Loading…', 'child.error': "Couldn't open this folder: {error}", 'child.notLoaded': 'Not loaded yet.',
+          'child.noMatches': 'No matches in this folder.', 'child.empty': 'Empty folder',
+          'more.loading': 'Loading 200 more…', 'more.show': 'Show 200 more · {shown} shown',
+          'picker.close': 'Close', 'picker.up': 'Up', 'picker.cancel': 'Cancel',
+          'picker.more': 'Load more folders', 'picker.choose': 'Choose this folder', 'picker.loading': 'Loading folders…',
+          'picker.noFoldersPage': 'No folders on this page.', 'picker.noSubfolders': 'No subfolders here. You can choose this folder as the destination.',
+          'picker.loadFailed': 'Could not load destination folders.', 'picker.loadFailedStatus': 'Could not load destination folders ({status})',
+          'transfer.noLibrary': "Couldn't identify this item's library. Select Reload libraries and try again.",
+          'transfer.copyTitle': 'Copy to a folder', 'transfer.moveTitle': 'Move to a folder',
+          'transfer.moveHint': 'Choose a destination in the same document library as “{name}”.',
+          'transfer.copyHint': 'Choose a destination in the same library. Copies inherit destination permissions and include only the latest major file version; metadata and version history are not copied.',
+          'transfer.confirmCopy': 'Copy “{name}” to:\n{dest}?', 'transfer.confirmMove': 'Move “{name}” to:\n{dest}?',
+          'transfer.copyWarning': 'SharePoint processes the copy in the background. Copies inherit destination permissions; metadata and version history are not copied. Folder copies are limited to 30,000 items.',
+          'transfer.moveWarning': 'This moves the item within the same document library.',
+          'transfer.failedStatus': '{op} failed ({status})', 'transfer.failed': '{op} failed: {error}',
+          'transfer.copyQueued': 'Copy submitted for “{name}”. SharePoint is processing it in the background; reopen the destination folder later to see it.',
+          'transfer.done': '{op} completed for “{name}”.',
+          'rename.promptFile': 'Enter the new file name:', 'rename.promptFolder': 'Enter the new folder name:',
+          'rename.invalid': "That name contains a character SharePoint doesn't allow, or ends with a period or space.",
+          'rename.checkFailed': "Couldn't check the item ({status})",
+          'rename.changed': 'This item has changed since it was shown here. The details above are current.',
+          'rename.unchanged': "This item hasn't changed since it was shown here.",
+          'rename.file': 'File', 'rename.folder': 'Folder', 'rename.path': 'Current path', 'rename.modified': 'Last modified', 'rename.unknown': 'Unknown',
+          'rename.size': 'Size', 'rename.filesInside': 'Files inside', 'rename.to': 'Rename to', 'common.continue': 'Continue?',
+          'rename.failedStatus': 'Rename failed ({status})', 'rename.failed': 'Rename failed: {error}',
+          'confirm.stop': 'Stop SharePoint Navigator? This page will stop working until you start the app again.',
+          'err.startLoading': "Couldn't start loading libraries ({status})", 'err.progress': "Couldn't read loading progress ({status})",
+          'err.loadFailed': 'Loading libraries failed.', 'err.couldntLoad': "Couldn't load libraries.", 'err.noLibraries': 'No libraries were found.',
+          'err.display': "Couldn't display the libraries.", 'err.metric': 'Size lookup failed ({status})', 'err.metricGeneric': 'Size lookup failed.',
+          'err.folder': 'Folder listing failed ({status})', 'err.folderGeneric': 'Could not read this folder.',
+          'row.trim': 'Trim old versions', 'row.trimTitle': 'Trim old versions in {name}',
+          'trim.title': 'Trim old versions', 'trim.hint': '{site} · every library in this site',
+          'trim.lastHeading': 'Last trim on this site', 'trim.ruleHeading': 'What to delete',
+          'trim.autoName': 'Automatic (recommended)', 'trim.autoNote': 'SharePoint decides by age: recent versions stay, older ones are thinned out, and the oldest are deleted.',
+          'trim.daysName': 'Delete versions older than', 'trim.daysUnit': 'days', 'trim.daysNote': 'At least 30 days. Newer versions are kept.',
+          'trim.countName': 'Keep a set number of versions', 'trim.countMajor': 'Versions to keep per file', 'trim.countMinor': 'Keep draft (minor) versions for the newest',
+          'trim.countNote': 'Each file keeps its newest versions up to this number; older ones are deleted.',
+          'trim.warning': "Trimmed versions are deleted permanently and don't go to the recycle bin. Current files stay as they are, and versions under a retention hold are kept. The trim covers every library in this site, runs in the background, and can take hours.",
+          'trim.confirmLabel': 'Type {word} to confirm', 'trim.refresh': 'Check again', 'trim.stop': 'Stop trim', 'trim.close': 'Close', 'trim.start': 'Start trim',
+          'trim.loading': 'Checking…', 'trim.none': 'No trim has been run on this site.', 'trim.loadFailed': "Couldn't check this site: {error}",
+          'trim.state.New': 'Queued', 'trim.state.NotStarted': 'Queued', 'trim.state.InProgress': 'Running', 'trim.state.CompleteSuccess': 'Finished',
+          'trim.state.Failed': 'Failed', 'trim.state.Cancelled': 'Stopped', 'trim.state.Canceled': 'Stopped',
+          'trim.rule.AutomaticTrim': 'Automatic', 'trim.rule.DeleteOlderThanDays': 'versions older than {date}',
+          'trim.rule.CountLimits': 'keep {major} versions per file', 'trim.requested': 'Requested {when}', 'trim.finished': 'finished {when}',
+          'trim.lastWork': 'last activity {when}', 'trim.result': '{deleted} versions deleted · {freed} freed', 'trim.failedVersions': '{n} could not be deleted',
+          'trim.errDays': 'Enter a whole number of days from 30 to 36,500.', 'trim.errMajor': 'Enter a whole number of versions from 1 to 50,000.',
+          'trim.errMinor': 'Draft versions must be kept for 0 up to the number of versions to keep.',
+          'trim.busyRunning': 'A trim is already queued or running here. Wait for it to finish, or stop it first.',
+          'trim.confirmStop': 'Stop the trim on {site}? Versions it already deleted stay deleted.',
+          'trim.queued': 'Trim queued for {site}. It runs in the background; storage sizes drop once it finishes.',
+          'trim.stopped': 'Stop requested for the trim on {site}.', 'trim.failed': 'Trim request failed: {error}', 'trim.failedStatus': 'Trim request failed ({status})',
+          'trim.policyRunning': 'Version limits are being applied to this site’s libraries (requested {when}). This can also delete versions.',
+          'trim.busyPolicy': 'Wait for the version-limit change to finish before starting a trim.',
+          'queue.checking': 'Checking…', 'queue.failed': "Couldn't check: {error}", 'queue.unchecked': '{n} not checked',
+          'queue.queued': 'Trim queued', 'queue.running': 'Trimming', 'queue.policy': 'Applying version limits',
+          'queue.badgeTitle': '{state} since {when}. Select to see details.', 'queue.badgeTitleNoTime': '{state}. Select to see details.',
+          'queue.done': 'Trimmed {date}', 'queue.trimFailed': 'Trim failed {date}', 'queue.stopped': 'Trim stopped {date}',
+          'queue.endedTitle': 'Ended {when}: {deleted} versions deleted, {freed} freed. Select to see details.',
+          'stats.trims': 'Trims', 'trims.active': '{n} active', 'trims.recent': '{n} recent', 'trims.title': 'Trims', 'trims.check': 'Check again',
+          'trims.hint': 'Waiting, running, or ended in the last 7 days · checked {when}', 'trims.none': 'Nothing waiting, running or ended in the last 7 days.',
+          'trims.unchecked': "{n} sites couldn't be checked.", 'trims.since': 'since {when}',
+          'trims.done': 'Finished', 'trims.failed': 'Failed', 'trims.stopped': 'Stopped',
+          'trims.result': '{when} · {deleted} versions deleted · {freed} freed',
+          'notice.title': 'About these numbers', 'size.tip': 'Current files: {current} · Version history: {history}',
+          'search.button': 'Search', 'search.back': '← Back to libraries', 'search.scope': 'Where', 'search.allSites': 'All sites',
+          'search.type': 'Type', 'search.typeAll': 'Everything', 'search.typeFolders': 'Folders', 'search.typeFiles': 'Files',
+          'search.typeOffice': 'Word, Excel, PowerPoint', 'search.typePdf': 'PDF', 'search.typeImages': 'Images',
+          'search.typeVideo': 'Video and audio', 'search.typeArchives': 'Zip and archives',
+          'search.size': 'Size', 'search.sizeAny': 'Any size', 'search.size10mb': 'Over 10 MB', 'search.size100mb': 'Over 100 MB', 'search.size1gb': 'Over 1 GB',
+          'search.modified': 'Modified', 'search.modifiedAny': 'Any time', 'search.modified30d': 'In the last 30 days',
+          'search.modified1y': 'Over a year ago', 'search.modified3y': 'Over 3 years ago',
+          'search.sortRelevance': 'Best match', 'search.sortSize': 'Largest first', 'search.sortNewest': 'Newest first', 'search.sortOldest': 'Oldest first',
+          'search.colName': 'Name', 'search.colWhere': 'Location', 'search.colSize': 'Size', 'search.colModified': 'Modified',
+          'search.searching': 'Searching…', 'search.count': '{n} results for “{q}”', 'search.countOne': '1 result for “{q}”',
+          'search.countAll': '{n} results', 'search.noneTitle': 'No results', 'search.noneText': 'Try other words or filters.',
+          'search.more': 'Show 50 more ({shown} of {total} shown)', 'search.reveal': 'Show in tree', 'search.revealTitle': 'Show {name} in the tree',
+          'search.notInTree': 'Not in a library shown here', 'search.failed': 'Search failed (HTTP {status}).', 'search.failedGeneric': 'Search failed.',
+          'search.revealMissing': "Couldn't find {name} in its folder. It may have been moved or renamed since SharePoint indexed it.",
+          'search.note': "Results come from SharePoint's search index, so very recent changes can take a few minutes to appear. Only items you can open are listed, and folder sizes aren't shown here."
+        },
+        ko: {
+          'theme.label': '테마', 'theme.light': '라이트', 'theme.dark': '다크', 'theme.system': '시스템', 'lang.label': '언어',
+          'badge.title': '이 앱은 이 컴퓨터에서만 실행됩니다.', 'badge.connecting': '연결 중…', 'badge.connected': '✓ SharePoint에 연결됨',
+          'badge.notConnected': '⚠ 연결되지 않음', 'badge.openFromApp': '⚠ 연결되지 않음 · 앱에서 이 페이지를 여세요',
+          'badge.notRunning': '⚠ 앱이 실행 중이 아님', 'badge.stopped': '중지됨',
+          'badge.stopFailed': '앱을 중지하지 못했습니다. 터미널 창에서 Ctrl+C를 누르세요.', 'badge.renamed': '✓ SharePoint에서 이름을 바꿨습니다 · {name}',
+          'button.stop': '앱 중지', 'button.reload': '라이브러리 다시 불러오기', 'button.collapse': '모두 접기',
+          'scan.aria': '라이브러리 불러오기 진행 상황', 'scan.trackAria': '읽은 사이트',
+          'scan.connecting': 'SharePoint에 연결하는 중…', 'scan.intro': '라이브러리를 먼저 불러옵니다. 라이브러리를 열면 폴더와 크기를 볼 수 있습니다.',
+          'scan.loaded': '라이브러리를 불러왔습니다', 'scan.failed': '라이브러리를 불러오지 못했습니다', 'scan.loading': '라이브러리를 불러오는 중…',
+          'scan.reading': '{site} 읽는 중', 'scan.openHint': '라이브러리나 폴더를 열면 내용과 크기를 볼 수 있습니다.', 'scan.connectingShort': '연결 중…',
+          'scan.counter': '사이트 {total}개 중 {done}개 · 라이브러리 {libs}개', 'scan.counterOne': '사이트 {total}개 중 {done}개 · 라이브러리 1개',
+          'scan.skippedOne': '사이트 1개를 건너뛰었습니다: {items}', 'scan.skippedMany': '사이트 {n}개를 건너뛰었습니다: {items}',
+          'scan.stoppedTitle': '앱이 중지되었습니다', 'scan.stoppedMsg': '다시 시작하려면 sharepoint-navigator.command를 실행하세요.',
+          'scan.notRunningTitle': '앱이 실행 중이 아닙니다', 'scan.notRunningMsg': 'sharepoint-navigator.command로 앱을 시작한 다음 이 페이지를 새로 고치세요.',
+          'reason.noAccess': '접근 권한 없음', 'reason.notFound': '찾을 수 없음', 'reason.error': '오류', 'site.home': '홈 사이트',
+          'stats.aria': '저장 공간 요약', 'stats.used': '사용된 스토리지',
+          'stats.history': '버전 기록', 'stats.measured': '{n}개 중 {m}개 측정됨', 'stats.historyShare': '사용된 스토리지의 {pct}',
+          'tree.aria': 'SharePoint 폴더 트리', 'search.placeholder': '모든 라이브러리 검색 (Enter)',
+          'sort.label': '정렬', 'sort.sizeDesc': '큰 순서', 'sort.sizeAsc': '작은 순서', 'sort.nameAsc': '이름 오름차순', 'sort.nameDesc': '이름 내림차순', 'sort.filesDesc': '파일 많은 순서', 'sort.filesAsc': '파일 적은 순서', 'sort.next': '정렬: {order}',
+          'legend.aria': '막대 차트 범례', 'legend.current': '현재 파일', 'legend.history': '버전 기록', 'legend.scale': '막대 = 사용된 스토리지 · 가장 큰 라이브러리 = 100%',
+          'head.name': '라이브러리 / 폴더', 'head.used': '사용된 스토리지', 'head.files': '파일 수',
+          'empty.loadingTitle': '라이브러리를 불러오는 중…', 'empty.loadingText': '각 사이트의 문서 라이브러리를 읽는 대로 여기에 표시됩니다.',
+          'empty.noMatchTitle': '일치하는 폴더가 없습니다', 'empty.noMatchText': '다른 검색어를 입력해 보세요.',
+          'notice': '라이브러리나 폴더를 열면 바로 아래에 있는 항목을 한 번에 200개씩 보여 줍니다. 사용된 스토리지는 SharePoint가 폴더에 보관하는 전체 용량으로, 현재 파일에 버전 기록(및 소량의 파일 정보)이 더해진 값입니다. 파일 행은 최신 버전만 보여 줍니다. 최근 변경 사항이 SharePoint에 반영되기까지 몇 분 걸릴 수 있습니다.',
+          'bar.scale': '가장 큰 라이브러리의 {pct}', 'bar.scaleNamed': '가장 큰 라이브러리({name})의 {pct}', 'bar.waiting': '라이브러리 크기를 기다리는 중',
+          'bar.split': '현재 파일: {current} · 버전 기록: {history} (소량의 파일 정보 포함) · {scale}',
+          'bar.currentOnly': '현재 파일만 표시 중이며 버전 기록은 불러오는 중 · {scale}', 'bar.file': '이 파일의 최신 버전 · {scale}', 'size.versions': '버전 기록', 'size.unavailable': '확인 불가', 'size.retry': '크기 확인 실패 · 다시 시도',
+          'size.currentLoading': '현재 파일 · 버전 기록 불러오는 중…', 'size.loading': '불러오는 중…', 'row.openTitle': 'SharePoint에서 열기', 'row.rename': '이름 바꾸기', 'row.copy': '복사', 'row.move': '이동',
+          'row.renameTitle': '{name} 이름 바꾸기', 'row.copyTitle': '{name} 복사', 'row.moveTitle': '{name} 이동',
+          'child.loading': '불러오는 중…', 'child.error': '이 폴더를 열 수 없습니다: {error}', 'child.notLoaded': '아직 불러오지 않았습니다.',
+          'child.noMatches': '이 폴더에는 일치하는 항목이 없습니다.', 'child.empty': '빈 폴더',
+          'more.loading': '200개 더 불러오는 중…', 'more.show': '200개 더 보기 · {shown}개 표시됨',
+          'picker.close': '닫기', 'picker.up': '위로', 'picker.cancel': '취소',
+          'picker.more': '폴더 더 불러오기', 'picker.choose': '이 폴더 선택', 'picker.loading': '폴더를 불러오는 중…',
+          'picker.noFoldersPage': '이 페이지에는 폴더가 없습니다.', 'picker.noSubfolders': '하위 폴더가 없습니다. 이 폴더를 대상으로 선택할 수 있습니다.',
+          'picker.loadFailed': '대상 폴더를 불러오지 못했습니다.', 'picker.loadFailedStatus': '대상 폴더를 불러오지 못했습니다 ({status})',
+          'transfer.noLibrary': "이 항목의 라이브러리를 확인할 수 없습니다. '라이브러리 다시 불러오기'를 누른 다음 다시 시도하세요.",
+          'transfer.copyTitle': '폴더로 복사', 'transfer.moveTitle': '폴더로 이동',
+          'transfer.moveHint': '“{name}”과(와) 같은 문서 라이브러리에서 대상 폴더를 선택하세요.',
+          'transfer.copyHint': '같은 문서 라이브러리에서 대상 폴더를 선택하세요. 복사본은 대상 폴더의 권한을 따르며 최신 주 버전만 포함합니다. 메타데이터와 버전 기록은 복사되지 않습니다.',
+          'transfer.confirmCopy': '“{name}”을(를) 다음 위치로 복사할까요?\n{dest}', 'transfer.confirmMove': '“{name}”을(를) 다음 위치로 이동할까요?\n{dest}',
+          'transfer.copyWarning': 'SharePoint가 백그라운드에서 복사를 처리합니다. 복사본은 대상 폴더의 권한을 따르며, 메타데이터와 버전 기록은 복사되지 않습니다. 폴더 복사는 항목 30,000개까지 가능합니다.',
+          'transfer.moveWarning': '같은 문서 라이브러리 안에서 항목을 이동합니다.',
+          'transfer.failedStatus': '{op} 실패 ({status})', 'transfer.failed': '{op} 실패: {error}',
+          'transfer.copyQueued': '“{name}” 복사를 요청했습니다. SharePoint가 백그라운드에서 처리하고 있으니 잠시 후 대상 폴더를 다시 열어 확인하세요.',
+          'transfer.done': '“{name}” {op}을(를) 완료했습니다.',
+          'rename.promptFile': '새 파일 이름을 입력하세요:', 'rename.promptFolder': '새 폴더 이름을 입력하세요:',
+          'rename.invalid': 'SharePoint에서 허용하지 않는 문자가 포함되어 있거나, 이름이 마침표나 공백으로 끝납니다.',
+          'rename.checkFailed': '항목을 확인하지 못했습니다 ({status})',
+          'rename.changed': '이 항목은 화면에 표시된 이후 변경되었습니다. 위 정보는 최신 상태입니다.',
+          'rename.unchanged': '이 항목은 화면에 표시된 이후 변경되지 않았습니다.',
+          'rename.file': '파일', 'rename.folder': '폴더', 'rename.path': '현재 경로', 'rename.modified': '마지막 수정', 'rename.unknown': '알 수 없음',
+          'rename.size': '크기', 'rename.filesInside': '포함된 파일', 'rename.to': '새 이름', 'common.continue': '계속할까요?',
+          'rename.failedStatus': '이름 바꾸기 실패 ({status})', 'rename.failed': '이름 바꾸기 실패: {error}',
+          'confirm.stop': 'SharePoint Navigator를 중지할까요? 앱을 다시 시작할 때까지 이 페이지는 작동하지 않습니다.',
+          'err.startLoading': '라이브러리 불러오기를 시작하지 못했습니다 ({status})', 'err.progress': '진행 상황을 읽지 못했습니다 ({status})',
+          'err.loadFailed': '라이브러리를 불러오지 못했습니다.', 'err.couldntLoad': '라이브러리를 불러오지 못했습니다.', 'err.noLibraries': '라이브러리를 찾지 못했습니다.',
+          'err.display': '라이브러리를 표시하지 못했습니다.', 'err.metric': '크기 확인 실패 ({status})', 'err.metricGeneric': '크기 확인에 실패했습니다.',
+          'err.folder': '폴더 목록을 읽지 못했습니다 ({status})', 'err.folderGeneric': '이 폴더를 읽지 못했습니다.',
+          'row.trim': '이전 버전 정리', 'row.trimTitle': '{name}의 이전 버전 정리',
+          'trim.title': '이전 버전 정리', 'trim.hint': '{site} · 이 사이트의 모든 라이브러리',
+          'trim.lastHeading': '이 사이트의 마지막 정리', 'trim.ruleHeading': '삭제할 버전',
+          'trim.autoName': '자동 (권장)', 'trim.autoNote': 'SharePoint가 기간에 따라 판단합니다. 최근 버전은 남기고, 오래된 버전은 줄이며, 가장 오래된 버전은 삭제합니다.',
+          'trim.daysName': '다음 기간보다 오래된 버전 삭제', 'trim.daysUnit': '일', 'trim.daysNote': '최소 30일입니다. 그보다 최근 버전은 남습니다.',
+          'trim.countName': '정해진 개수만 남기기', 'trim.countMajor': '파일당 남길 버전 수', 'trim.countMinor': '부 버전(초안)을 남길 최신 버전 수',
+          'trim.countNote': '파일마다 최신 버전을 이 개수까지 남기고 나머지는 삭제합니다.',
+          'trim.warning': '정리된 버전은 영구 삭제되며 휴지통으로 가지 않습니다. 현재 파일은 그대로이고, 보존 정책이 걸린 버전은 남습니다. 이 사이트의 모든 라이브러리에 적용되며, 백그라운드에서 실행되어 몇 시간이 걸릴 수 있습니다.',
+          'trim.confirmLabel': '확인하려면 {word}을(를) 입력하세요', 'trim.refresh': '다시 확인', 'trim.stop': '정리 중지', 'trim.close': '닫기', 'trim.start': '정리 시작',
+          'trim.loading': '확인하는 중…', 'trim.none': '이 사이트에서 실행한 정리가 없습니다.', 'trim.loadFailed': '이 사이트를 확인하지 못했습니다: {error}',
+          'trim.state.New': '대기 중', 'trim.state.NotStarted': '대기 중', 'trim.state.InProgress': '실행 중', 'trim.state.CompleteSuccess': '완료',
+          'trim.state.Failed': '실패', 'trim.state.Cancelled': '중지됨', 'trim.state.Canceled': '중지됨',
+          'trim.rule.AutomaticTrim': '자동', 'trim.rule.DeleteOlderThanDays': '{date} 이전 버전',
+          'trim.rule.CountLimits': '파일당 {major}개 남기기', 'trim.requested': '{when} 요청', 'trim.finished': '{when} 완료',
+          'trim.lastWork': '마지막 처리 {when}', 'trim.result': '버전 {deleted}개 삭제 · {freed} 확보', 'trim.failedVersions': '{n}개는 삭제하지 못함',
+          'trim.errDays': '30에서 36,500 사이의 정수로 일 수를 입력하세요.', 'trim.errMajor': '1에서 50,000 사이의 정수로 버전 수를 입력하세요.',
+          'trim.errMinor': '부 버전을 남길 수는 0부터 남길 버전 수까지만 가능합니다.',
+          'trim.busyRunning': '이미 대기 중이거나 실행 중인 정리가 있습니다. 끝날 때까지 기다리거나 먼저 중지하세요.',
+          'trim.confirmStop': '{site}의 정리를 중지할까요? 이미 삭제된 버전은 되돌릴 수 없습니다.',
+          'trim.queued': '{site}의 정리를 요청했습니다. 백그라운드에서 실행되며, 끝나면 사용된 스토리지가 줄어듭니다.',
+          'trim.stopped': '{site}의 정리 중지를 요청했습니다.', 'trim.failed': '정리 요청 실패: {error}', 'trim.failedStatus': '정리 요청 실패 ({status})',
+          'trim.policyRunning': '이 사이트의 라이브러리에 버전 한도를 적용하는 중입니다({when} 요청). 이 작업도 버전을 삭제할 수 있습니다.',
+          'trim.busyPolicy': '버전 한도 적용이 끝난 다음 정리를 시작하세요.',
+          'queue.checking': '확인하는 중…', 'queue.failed': '확인하지 못했습니다: {error}', 'queue.unchecked': '{n}개 확인 못 함',
+          'queue.queued': '정리 대기 중', 'queue.running': '정리 중', 'queue.policy': '버전 한도 적용 중',
+          'queue.badgeTitle': '{when}부터 {state}. 눌러서 자세히 보기.', 'queue.badgeTitleNoTime': '{state}. 눌러서 자세히 보기.',
+          'queue.done': '{date} 정리 완료', 'queue.trimFailed': '{date} 정리 실패', 'queue.stopped': '{date} 정리 중지됨',
+          'queue.endedTitle': '{when} 종료: 버전 {deleted}개 삭제, {freed} 확보. 눌러서 자세히 보기.',
+          'stats.trims': '정리', 'trims.active': '{n}개 진행 중', 'trims.recent': '최근 {n}개', 'trims.title': '정리', 'trims.check': '다시 확인',
+          'trims.hint': '대기 중, 실행 중, 또는 최근 7일 안에 끝난 정리 · {when} 확인', 'trims.none': '대기 중이거나 실행 중이거나 최근 7일 안에 끝난 정리가 없습니다.',
+          'trims.unchecked': '사이트 {n}개를 확인하지 못했습니다.', 'trims.since': '{when}부터',
+          'trims.done': '완료', 'trims.failed': '실패', 'trims.stopped': '중지됨',
+          'trims.result': '{when} · 버전 {deleted}개 삭제 · {freed} 확보',
+          'notice.title': '이 숫자에 대해', 'size.tip': '현재 파일: {current} · 버전 기록: {history}',
+          'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기', 'search.scope': '위치', 'search.allSites': '모든 사이트',
+          'search.type': '종류', 'search.typeAll': '전체', 'search.typeFolders': '폴더', 'search.typeFiles': '파일',
+          'search.typeOffice': 'Word, Excel, PowerPoint', 'search.typePdf': 'PDF', 'search.typeImages': '이미지',
+          'search.typeVideo': '동영상·오디오', 'search.typeArchives': '압축 파일',
+          'search.size': '크기', 'search.sizeAny': '모든 크기', 'search.size10mb': '10MB 이상', 'search.size100mb': '100MB 이상', 'search.size1gb': '1GB 이상',
+          'search.modified': '수정', 'search.modifiedAny': '모든 기간', 'search.modified30d': '최근 30일',
+          'search.modified1y': '1년 이상 지난 항목', 'search.modified3y': '3년 이상 지난 항목',
+          'search.sortRelevance': '관련성', 'search.sortSize': '큰 순서', 'search.sortNewest': '최신순', 'search.sortOldest': '오래된 순',
+          'search.colName': '이름', 'search.colWhere': '위치', 'search.colSize': '크기', 'search.colModified': '수정한 날짜',
+          'search.searching': '검색 중…', 'search.count': '“{q}” 검색 결과 {n}개', 'search.countOne': '“{q}” 검색 결과 1개',
+          'search.countAll': '검색 결과 {n}개', 'search.noneTitle': '검색 결과가 없습니다', 'search.noneText': '다른 검색어나 필터를 사용해 보세요.',
+          'search.more': '50개 더 보기 ({total}개 중 {shown}개 표시)', 'search.reveal': '트리에서 보기', 'search.revealTitle': '트리에서 {name} 보기',
+          'search.notInTree': '여기에 표시된 라이브러리에 없음', 'search.failed': '검색에 실패했습니다 (HTTP {status}).', 'search.failedGeneric': '검색에 실패했습니다.',
+          'search.revealMissing': '폴더에서 {name}을(를) 찾지 못했습니다. SharePoint가 색인한 뒤 이동했거나 이름이 바뀌었을 수 있습니다.',
+          'search.note': '결과는 SharePoint 검색 색인에서 가져오므로 아주 최근의 변경은 몇 분 뒤에 나타날 수 있습니다. 열 수 있는 항목만 표시되며, 여기서는 폴더 크기를 보여 주지 않습니다.'
+        }
+      };
+      // localStorage can throw (private windows, blocked data), hence these wrappers.
+      function readSetting(key) { try { return localStorage.getItem(key); } catch { return null; } }
+      function saveSetting(key, value) { try { localStorage.setItem(key, value); } catch {} }
+      // Saved language, or the browser's language on the first visit.
+      let lang = readSetting('spnav-lang') || ((navigator.language || '').toLowerCase().startsWith('ko') ? 'ko' : 'en');
+      if (!I18N[lang]) lang = 'en';
+      // Translate a key and fill {placeholders}; a missing value stays visible.
+      function t(key, vars = {}) {
+        const text = (I18N[lang] && I18N[lang][key]) ?? I18N.en[key] ?? key;
+        return text.replace(/\{(\w+)\}/g, (_, name) => (vars[name] ?? `{${name}}`));
+      }
+      // Translate data-i18n* markup and mark the pressed language button.
+      function applyStaticText() {
+        document.documentElement.lang = lang;
+        for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n);
+        for (const node of document.querySelectorAll('[data-i18n-placeholder]')) node.placeholder = t(node.dataset.i18nPlaceholder);
+        for (const node of document.querySelectorAll('[data-i18n-title]')) node.title = t(node.dataset.i18nTitle);
+        for (const node of document.querySelectorAll('[data-i18n-aria]')) node.setAttribute('aria-label', t(node.dataset.i18nAria));
+        for (const button of document.querySelectorAll('[data-lang-choice]')) button.setAttribute('aria-pressed', String(button.dataset.langChoice === lang));
+      }
+      // Text set by code is remembered as keys, so a language switch can redraw it.
+      let badgeState = { key: 'badge.connecting', vars: {} };
+      // setBadge() stores a key; setBadgeText() stores literal text (server messages).
+      function setBadge(key, vars = {}) { badgeState = { key, vars }; serviceBadge.textContent = t(key, vars); }
+      function setBadgeText(text) { badgeState = { text }; serviceBadge.textContent = text; }
+      // Loading-panel text: fixed (scanTextState) or last progress (lastProgress), never both.
+      let scanTextState = { title: 'scan.connecting', message: { key: 'scan.intro' } };
+      let lastProgress = null;
+      // Show a fixed loading-panel title and message, remembered for a language switch.
+      function setScanState(titleKey, message) {
+        scanTextState = { title: titleKey, message };
+        $('scanTitle').textContent = t(titleKey);
+        $('scanMessage').textContent = message.key ? t(message.key) : message.text;
+      }
+      // Switch language, save it, and redraw all translated text.
+      function setLanguage(next) {
+        if (!I18N[next]) return;
+        lang = next;
+        saveSetting('spnav-lang', lang);
+        applyStaticText();
+        serviceBadge.textContent = badgeState.text ?? t(badgeState.key, badgeState.vars);
+        if (scanTextState) setScanState(scanTextState.title, scanTextState.message);
+        else if (lastProgress) updateScanDisplay(lastProgress.progress, lastProgress.rowCount);
+        updateStats();
+        if (loaded) render();
+        if (trimState) renderTrimDialog();
+        if (searchState.active) { fillSearchScope(); renderSearch(); }
+      }
+      // ---- Theme ----
+      // 'light'/'dark' set html[data-theme]; 'system' removes it so the media query decides.
+      function setTheme(choice) {
+        if (choice === 'light' || choice === 'dark') document.documentElement.dataset.theme = choice;
+        else delete document.documentElement.dataset.theme;
+        saveSetting('spnav-theme', choice);
+        for (const button of document.querySelectorAll('[data-theme-choice]')) button.setAttribute('aria-pressed', String(button.dataset.themeChoice === choice));
+      }
+      // Theme and Language buttons.
+      for (const button of document.querySelectorAll('[data-theme-choice]')) button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
+      for (const button of document.querySelectorAll('[data-lang-choice]')) button.addEventListener('click', () => setLanguage(button.dataset.langChoice));
+      // Copy / Move dialog state (openTransferPicker); null when closed.
+      let transferSelection = null;
+
+      // ---- Reading rows from the service ----
+      // Rows use CSV-style column names; read() matches case-insensitively, trims, '' if missing.
+      function read(row, key) {
+        const target = key.toLowerCase();
+        const k = Object.keys(row).find(x => x.trim().toLowerCase() === target);
+        return k ? String(row[k] ?? '').trim() : '';
+      }
+      // Parse a number (thousands separators allowed); invalid or negative -> 0.
+      function numberValue(value) {
+        const n = Number(String(value).replace(/,/g, ''));
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      }
+      // URL-decode one path segment ('+' means space); keep it raw if invalid.
+      function decodeSegment(s) {
+        try { return decodeURIComponent(s.replace(/\+/g, '%20')); } catch { return s; }
+      }
+      // Split a path into decoded, non-empty segments.
+      function segments(path) {
+        return String(path || '').split('/').filter(Boolean).map(decodeSegment);
+      }
+      // Segment form used for case-insensitive comparisons.
+      function normalizedSegment(s) { return decodeSegment(String(s || '')).toLowerCase(); }
+      // ---- Paths and URLs ----
+      // Folder segments below the library root (site path and library name stripped).
+      function getRemainder(folderPath, siteUrl, library) {
+        const pathSegs = segments(folderPath);
+        if (!String(folderPath).startsWith('/')) {
+          const rel = pathSegs;
+          if (rel.length && normalizedSegment(rel[0]) === normalizedSegment(library)) return rel.slice(1);
+          return rel;
+        }
+        let siteSegs = [];
+        try { siteSegs = segments(new URL(siteUrl).pathname); } catch {}
+        let common = 0;
+        while (common < siteSegs.length && common < pathSegs.length && normalizedSegment(siteSegs[common]) === normalizedSegment(pathSegs[common])) common++;
+        let afterSite = pathSegs.slice(common);
+        // First segment after the site URL is the library's URL name (often "Shared Documents").
+        if (afterSite.length) afterSite = afterSite.slice(1);
+        return afterSite;
+      }
+      // Browser URL of the library root, or the site URL as a fallback.
+      function getLibraryRootUrl(folderPath, siteUrl) {
+        try {
+          const pathSegs = segments(folderPath);
+          const siteSegs = segments(new URL(siteUrl).pathname);
+          const librarySeg = pathSegs[siteSegs.length];
+          if (!librarySeg) return siteUrl;
+          const u = new URL(siteUrl);
+          u.pathname = '/' + [...siteSegs, librarySeg].map(encodeURIComponent).join('/');
+          return u.href;
+        } catch { return siteUrl; }
+      }
+      // Server-relative path of the library containing itemPath, or ''.
+      function getLibraryRootPathForItem(itemPath, siteUrl) {
+        const pathParts = segments(itemPath);
+        let siteParts = [];
+        try { siteParts = segments(new URL(siteUrl).pathname); } catch {}
+        if (pathParts.length <= siteParts.length) return '';
+        return '/' + pathParts.slice(0, siteParts.length + 1).join('/');
+      }
+      // ---- Building the tree from rows ----
+      // Tree node; kind is site, library, folder or file; children is a Map by name.
+      function makeNode(name, kind, extra = {}) {
+        return { name, kind, children: new Map(), sizeBytes: 0, sizeMB: 0, fileCount: 0, path: '', url: '', hasChildren: false, ...extra };
+      }
+      // Walk (creating folder nodes) along parts, then copy info onto the last node.
+      function addPath(parent, parts, info) {
+        let node = parent;
+        for (const part of parts) {
+          if (!node.children.has(part)) node.children.set(part, makeNode(part, 'folder'));
+          node = node.children.get(part);
+        }
+        if (info) {
+          if (info.sizeBytes != null) node.sizeBytes = info.sizeBytes;
+          if (info.sizeMB != null) node.sizeMB = info.sizeMB;
+          if (info.fileCount != null) node.fileCount = info.fileCount;
+          if (info.path) node.path = info.path;
+          if (info.url) node.url = info.url;
+          if (info.siteUrl) node.siteUrl = info.siteUrl;
+          if (info.lastModified) node.lastModified = info.lastModified;
+          if (info.hasChildren != null) node.hasChildren = info.hasChildren;
+          if (info.childCount != null) node.childCount = info.childCount;
+        }
+      }
+      // Flat rows -> site -> library -> folder/file nodes; returns sites sorted by name.
+      function buildTree(records) {
+        const siteMap = new Map();
+        const valid = records.filter(r => read(r, 'SiteUrl') && read(r, 'Library'));
+        for (const r of valid) {
+          const siteUrl = read(r, 'SiteUrl');
+          const siteTitle = read(r, 'SiteTitle') || new URL(siteUrl).hostname;
+          const library = read(r, 'Library');
+          const type = read(r, 'ItemType').toLowerCase();
+          const rawPath = read(r, 'FolderPath');
+          const sizeBytes = numberValue(read(r, 'SizeBytes'));
+          const sizeMB = numberValue(read(r, 'SizeMB'));
+          const fileCount = numberValue(read(r, 'FileCount'));
+          if (!siteMap.has(siteUrl)) siteMap.set(siteUrl, makeNode(siteTitle, 'site', { url: siteUrl }));
+          const site = siteMap.get(siteUrl);
+          const libraryKey = library;
+          if (!site.children.has(libraryKey)) site.children.set(libraryKey, makeNode(library, 'library', { url: siteUrl, siteTitle, siteUrl }));
+          const libNode = site.children.get(libraryKey);
+          if (type === 'library root') {
+            libNode.sizeBytes = sizeBytes;
+            libNode.sizeMB = sizeMB;
+            libNode.fileCount = fileCount;
+            libNode.path = rawPath;
+            libNode.libraryRootPath = rawPath;
+            libNode.url = getLibraryRootUrl(rawPath, siteUrl);
+            libNode.siteUrl = siteUrl;
+            libNode.hasChildren = read(r, 'HasChildren').toLowerCase() !== 'false';
+            continue;
+          }
+          const parts = getRemainder(rawPath, siteUrl, library);
+          if (rawPath.startsWith('/')) libNode.url = getLibraryRootUrl(rawPath, siteUrl);
+          let folderUrl = '';
+          if (rawPath.startsWith('/')) {
+            try { folderUrl = new URL(rawPath, siteUrl).href; } catch {}
+          } else {
+            try { folderUrl = new URL('/' + rawPath.split('/').map(encodeURIComponent).join('/'), siteUrl).href; } catch {}
+          }
+          const itemInfo = {
+            sizeBytes, sizeMB, fileCount, path: rawPath, url: folderUrl, siteUrl,
+            libraryRootPath: libNode.path || getLibraryRootPathForItem(rawPath, siteUrl),
+            lastModified: read(r, 'LastModified'),
+            hasChildren: type === 'folder' && read(r, 'HasChildren').toLowerCase() !== 'false',
+            childCount: numberValue(read(r, 'ChildCount'))
+          };
+          if (type === 'file') {
+            if (!parts.length) continue;
+            const fileName = parts.pop();
+            addPath(libNode, parts, null);
+            let parent = libNode;
+            for (const part of parts) parent = parent.children.get(part);
+            if (!parent.children.has(fileName)) parent.children.set(fileName, makeNode(fileName, 'file'));
+            Object.assign(parent.children.get(fileName), itemInfo);
+          } else if (type === 'folder') {
+            if (!parts.length) continue;
+            addPath(libNode, parts, itemInfo);
+          }
+        }
+        return [...siteMap.values()].sort((a,b) => a.name.localeCompare(b.name));
+      }
+      function allChildren(node) { return [...node.children.values()]; }
+      // Estimate before metrics: known files count as Current files, the rest as Version history.
+      function setStorageBreakdown(node) {
+        for (const child of node.children.values()) setStorageBreakdown(child);
+        if (node.kind === 'file') {
+          node.currentFileBytes = node.sizeBytes;
+          return node.currentFileBytes;
+        }
+        node.currentFileBytes = [...node.children.values()].reduce((sum, child) => sum + (child.currentFileBytes || 0), 0);
+        if (node.kind === 'folder' || node.kind === 'library') {
+          const difference = node.sizeBytes - node.currentFileBytes;
+          node.historyOtherEstimateBytes = Math.max(0, difference);
+          node.currentOverMetricBytes = Math.max(0, -difference);
+        }
+        return node.currentFileBytes;
+      }
+      // Cache key for a node's size: kind|siteUrl|path, lower-cased.
+      function storageMetricKey(node) {
+        return `${node.kind}|${node.siteUrl || ''}|${node.path || node.name}`.toLowerCase();
+      }
+      // Cache key for a folder's listing: siteUrl|path, lower-cased.
+      function folderChildrenKey(node) {
+        return `${node.siteUrl || ''}|${node.path || node.name}`.toLowerCase();
+      }
+      // After a rebuild, restore listing state from the caches onto the fresh nodes.
+      function applyCachedFolderChildState(node) {
+        for (const child of node.children.values()) applyCachedFolderChildState(child);
+        if (!['folder', 'library'].includes(node.kind)) return;
+        const key = folderChildrenKey(node);
+        node.childrenLoaded = folderChildrenCache.has(key);
+        node.childrenLoading = folderChildrenPending.has(`${storageMetricGeneration}|${key}`);
+        node.childrenError = folderChildrenErrors.get(key) || '';
+        if (node.childrenLoaded) node.hasChildren = (folderChildrenCache.get(key) || []).length > 0 || Boolean(folderChildrenMore.get(key));
+      }
+      // After the tree is rebuilt, re-apply metrics already fetched.
+      function applyCachedStorageMetrics(node) {
+        for (const child of node.children.values()) applyCachedStorageMetrics(child);
+        applyStorageMetricToNode(node, storageMetricCache.get(storageMetricKey(node)));
+      }
+      // Apply a SharePoint metric (Storage used, Current files, Version history); track the largest total.
+      function applyStorageMetricToNode(node, metric) {
+        if (!metric) return;
+        largestMeasuredBytes = Math.max(largestMeasuredBytes, metric.totalSize || 0);
+        node.sharePointMetric = metric;
+        node.sizeBytes = metric.totalSize;
+        node.sizeMB = metric.totalSize / 1048576;
+        node.fileCount = metric.totalFileCount;
+        node.currentFileBytes = metric.totalFileStreamSize;
+        node.historyOtherEstimateBytes = Math.max(0, metric.totalSize - metric.totalFileStreamSize);
+        node.currentOverMetricBytes = Math.max(0, metric.totalFileStreamSize - metric.totalSize);
+      }
+      // ---- Storage metric queue ----
+      // Queue a size lookup unless cached or queued; folders first, deeper first, then FIFO.
+      function enqueueStorageMetric(node) {
+        if (!serviceOnline || !node.siteUrl || !node.path || !['folder', 'library'].includes(node.kind)) return;
+        const key = storageMetricKey(node);
+        const generation = storageMetricGeneration;
+        const pendingKey = `${generation}|${key}`;
+        if (storageMetricCache.has(key) || storageMetricPending.has(pendingKey)) return;
+        storageMetricPending.add(pendingKey);
+        storageMetricErrors.delete(key);
+        const depth = String(node.path || '').split('/').filter(Boolean).length;
+        storageMetricQueue.push({ node, key, generation, pendingKey, priority: node.kind === 'folder' ? 0 : 1, depth, sequence: storageMetricQueueSequence++ });
+        storageMetricQueue.sort((a, b) => a.priority - b.priority || b.depth - a.depth || a.sequence - b.sequence);
+        pumpStorageMetricQueue();
+      }
+      // Start jobs up to the concurrency limit, skipping stale generations.
+      function pumpStorageMetricQueue() {
+        while (storageMetricActive < STORAGE_METRIC_CONCURRENCY && storageMetricQueue.length) {
+          const job = storageMetricQueue.shift();
+          if (job.generation !== storageMetricGeneration) {
+            storageMetricPending.delete(job.pendingKey);
+            continue;
+          }
+          storageMetricActive++;
+          loadStorageMetric(job).finally(() => {
+            storageMetricActive--;
+            pumpStorageMetricQueue();
+          });
+        }
+      }
+      // Normalize a server metric (response or row StorageMetric) to numbers.
+      function metricFromValue(value) {
+        return {
+          totalSize: numberValue(value.totalSize),
+          totalFileStreamSize: numberValue(value.totalFileStreamSize),
+          totalFileCount: numberValue(value.totalFileCount),
+          lastModified: value.lastModified || ''
+        };
+      }
+      // Fetch one metric. The result goes to storageMetricNodes.get(key), not job.node,
+      // because the tree may have been rebuilt meanwhile.
+      async function loadStorageMetric(job) {
+        const { node, key, generation, pendingKey } = job;
+        try {
+          const response = await fetch('/api/storage-metric', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({ siteUrl: node.siteUrl, folderPath: node.path })
+          });
+          const value = await response.json();
+          if (!response.ok || !value.ok) throw new Error(value.error || t('err.metric', { status: response.status }));
+          if (generation === storageMetricGeneration) {
+            const metric = metricFromValue(value);
+            storageMetricCache.set(key, metric);
+            applyStorageMetricToNode(storageMetricNodes.get(key), metric);
+            if (node.kind === 'library') updateStats();
+          }
+        } catch (err) {
+          if (generation === storageMetricGeneration) storageMetricErrors.set(key, err.message || t('err.metricGeneric'));
+        } finally {
+          storageMetricPending.delete(pendingKey);
+          if (generation === storageMetricGeneration) {
+            scheduleStorageMetricRender();
+          }
+        }
+      }
+      // Results tend to arrive in bursts; re-render at most once per 180 ms.
+      function scheduleStorageMetricRender() {
+        if (storageMetricRenderTimer) return;
+        storageMetricRenderTimer = window.setTimeout(() => {
+          storageMetricRenderTimer = 0;
+          render();
+        }, 180);
+      }
+      // ---- Folder children ----
+      // Load one page (200) of a folder's DIRECT children; loadMore fetches the next page.
+      async function loadFolderChildren(node, loadMore = false) {
+        if (!serviceOnline || !node.siteUrl || !node.path || !['folder', 'library'].includes(node.kind)) return;
+        const key = folderChildrenKey(node);
+        const generation = storageMetricGeneration;
+        const pendingKey = `${generation}|${key}`;
+        if ((!loadMore && folderChildrenCache.has(key)) || (loadMore && !folderChildrenMore.get(key)) || folderChildrenPending.has(pendingKey)) return;
+        folderChildrenPending.add(pendingKey);
+        folderChildrenErrors.delete(key);
+        try {
+          const response = await fetch('/api/folder-children', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              siteUrl: node.siteUrl,
+              folderPath: node.path,
+              loadMore,
+              loadedCount: (folderChildrenCache.get(key) || []).length
+            })
+          });
+          const value = await response.json();
+          if (!response.ok || !value.ok) throw new Error(value.error || t('err.folder', { status: response.status }));
+          // Ignore if a reload, rename or transfer happened meanwhile.
+          if (generation === storageMetricGeneration) {
+            const rows = Array.isArray(value.rows) ? value.rows : [];
+            // Cache the page; also add it to scanRecords so a rebuild mid-scan keeps it.
+            folderChildrenCache.set(key, [...(folderChildrenCache.get(key) || []), ...rows]);
+            folderChildrenMore.set(key, Boolean(value.nextPageAvailable));
+            scanRecords.push(...rows);
+            mergeDirectChildRows(node, rows);
+          }
+        } catch (err) {
+          if (generation === storageMetricGeneration) folderChildrenErrors.set(key, err.message || t('err.folderGeneric'));
+        } finally {
+          folderChildrenPending.delete(pendingKey);
+          if (generation === storageMetricGeneration) render();
+        }
+      }
+      // ---- Search and sort ----
+      // True if the node or a loaded descendant matches (name, site, path or URL).
+      function matches(node, query) {
+        if (!query) return true;
+        if (node.name.toLowerCase().includes(query) || (node.siteTitle || '').toLowerCase().includes(query) || (node.path || '').toLowerCase().includes(query) || (node.url || '').toLowerCase().includes(query)) return true;
+        return [...node.children.values()].some(child => matches(child, query));
+      }
+      // Sort comparator; libraries sort as "Site/Documents", size ties break by name.
+      function compareNodes(a, b) {
+        const mode = sortEl.value || 'size-desc';
+        if (mode.startsWith('name')) {
+          const aName = a.kind === 'library' ? `${a.siteTitle || ''}/Documents` : a.name;
+          const bName = b.kind === 'library' ? `${b.siteTitle || ''}/Documents` : b.name;
+          const result = aName.localeCompare(bName, undefined, { sensitivity: 'base', numeric: true });
+          return mode === 'name-desc' ? -result : result;
+        }
+        if (mode.startsWith('files')) {
+          // Unmeasured rows and files count as 0; ties break by name.
+          const result = (a.fileCount || 0) - (b.fileCount || 0);
+          return (mode === 'files-asc' ? result : -result) || a.name.localeCompare(b.name);
+        }
+        const aSize = a.sizeMB || a.sizeBytes / 1048576;
+        const bSize = b.sizeMB || b.sizeBytes / 1048576;
+        const result = aSize - bSize;
+        return mode === 'size-asc' ? result || a.name.localeCompare(b.name) : -result || a.name.localeCompare(b.name);
+      }
+      // Column-header sorting. The narrow-screen menu (sortEl) holds the current order, so both stay in step.
+      // A new column starts in its usual direction (names A–Z, sizes and counts largest first);
+      // clicking the active column again reverses it.
+      const SORT_FIRST = { name: 'name-asc', size: 'size-desc', files: 'files-desc' };
+      const SORT_LABEL = { 'size-desc': 'sort.sizeDesc', 'size-asc': 'sort.sizeAsc', 'name-asc': 'sort.nameAsc', 'name-desc': 'sort.nameDesc', 'files-desc': 'sort.filesDesc', 'files-asc': 'sort.filesAsc' };
+      const sortHeads = [...document.querySelectorAll('.head-sort')];
+      function reversedSort(mode) { return mode.endsWith('-desc') ? mode.replace(/-desc$/, '-asc') : mode.replace(/-asc$/, '-desc'); }
+      function setSort(key) {
+        const current = sortEl.value || 'size-desc';
+        sortEl.value = current.startsWith(`${key}-`) ? reversedSort(current) : SORT_FIRST[key];
+        render();
+      }
+      // Arrow on the active header (↓ for descending, ↑ for ascending); the tooltip names the order a click gives.
+      function updateSortHeads() {
+        const current = sortEl.value || 'size-desc';
+        for (const button of sortHeads) {
+          const key = button.dataset.sortKey;
+          const active = current.startsWith(`${key}-`);
+          const next = active ? reversedSort(current) : SORT_FIRST[key];
+          button.classList.toggle('active', active);
+          button.querySelector('.sort-arrow').textContent = active ? (current.endsWith('-desc') ? '↓' : '↑') : '';
+          button.title = t('sort.next', { order: t(SORT_LABEL[next]) });
+          if (active) button.setAttribute('aria-description', t(SORT_LABEL[current]));
+          else button.removeAttribute('aria-description');
+        }
+      }
+      // ---- Rendering ----
+      // Create an element with an optional class and text.
+      function el(tag, cls, txt) {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (txt != null) n.textContent = txt;
+        return n;
+      }
+      // Global bar scale: largest measured library, or largest metric seen if bigger.
+      function updateBarScale() {
+        let max = 0;
+        let name = '';
+        for (const site of roots) {
+          for (const library of site.children.values()) {
+            const bytes = library.sharePointMetric ? library.sizeBytes : 0;
+            if (bytes > max) { max = bytes; name = site.name; }
+          }
+        }
+        if (largestMeasuredBytes > max) { max = largestMeasuredBytes; name = ''; }
+        barScaleBytes = max;
+        barScaleName = name;
+      }
+      // Percentage for tooltips: '<0.1%' for tiny values, one decimal below 10%.
+      function formatPercent(value) {
+        if (value <= 0) return '0%';
+        if (value < 0.1) return '<0.1%';
+        return `${value < 10 ? value.toFixed(1) : Math.round(value)}%`;
+      }
+      // One "swatch, value" line under the main size figure. The top legend names the colour,
+      // so the row shows no words; the label is kept for screen readers.
+      function sizeLine(kind, label, bytes) {
+        const line = el('span', 'size-line');
+        const swatch = el('i', `legend-swatch ${kind}`);
+        swatch.setAttribute('role', 'img');
+        swatch.setAttribute('aria-label', label);
+        const name = el('span', 'size-line-label');
+        name.append(swatch);
+        line.append(name, el('span', '', fmtBytes(bytes)));
+        return line;
+      }
+      // Row action icons, drawn inline so they follow the theme colour.
+      const ACTION_ICONS = {
+        open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+        rename: '<path d="M4 20l1-4L16 5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14 7l3 3"/>',
+        copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+        move: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 13h7"/><path d="M13 10l3 3-3 3"/>',
+        up: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
+        folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+        chevron: '<path d="M9 6l6 6-6 6"/>',
+        // Folder with a magnifier: "Show in tree" (like Finder's Show in Enclosing Folder). Shape after Lucide folder-search (ISC).
+        reveal: '<path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"/><circle cx="17" cy="17" r="3"/><path d="M21 21l-1.9-1.9"/>',
+        // Trash can with a clock: permanent deletion of old versions. A plain trash can
+        // would read as "delete this library".
+        trim: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><circle cx="12" cy="14" r="3.6"/><path d="M12 12.4v1.8l1.2.8"/>'
+      };
+      // Icon, short tooltip, and a full label for screen readers.
+      function setActionIcon(target, icon, tip, label) {
+        target.innerHTML = `<svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">${ACTION_ICONS[icon]}</svg>`;
+        target.dataset.tip = tip;
+        target.setAttribute('aria-label', label);
+      }
+      // One row: <details>/<summary> with five grid cells; children built only while open.
+      // details._navigatorNode links back to the node for requestVisibleStorageMetrics().
+      function createRow(node, depth, query, parentNode = null) {
+        const details = document.createElement('details');
+        details.className = 'node';
+        details.dataset.kind = node.kind;
+        details._navigatorNode = node;
+        // Same format as folderNodeKey(); not lower-cased, unlike the cache keys.
+        const nodeKey = `${node.kind}|${node.siteUrl || ''}|${node.path || node.name}`;
+        const rowMetricKey = storageMetricKey(node);
+        const rowMetricPending = storageMetricPending.has(`${storageMetricGeneration}|${rowMetricKey}`);
+        const rowMetricError = storageMetricErrors.get(rowMetricKey);
+        details.dataset.nodeKey = nodeKey;
+        // Reopen remembered rows; open everything while searching.
+        if (query || expandedNodeKeys.has(nodeKey)) details.open = true;
+        const isContainer = node.kind === 'folder' || node.kind === 'library';
+        // measured: a full SharePoint metric is in.
+        const measured = Boolean(node.sharePointMetric);
+        const summary = document.createElement('summary');
+        summary.className = 'row';
+        // <details> toggles after this handler runs, so wait a tick before loading.
+        summary.addEventListener('click', event => {
+          const pane = details.open && isContainer && !reduceMotion && !details.dataset.closing
+            ? details.querySelector(':scope > .children') : null;
+          if (pane) {
+            event.preventDefault(); // stay open until the slide-up ends
+            closePane(details, node, pane);
+            return;
+          }
+          if (!details.open && isContainer && !reduceMotion) revealStarts.set(folderChildrenKey(node), null);
+          window.setTimeout(() => {
+            if (!details.open || !isContainer) return;
+            if (!folderChildrenCache.has(folderChildrenKey(node))) void loadFolderChildren(node);
+            populateOpenRow(details, node);
+          }, 0);
+        });
+
+        // Name (the only indented column).
+        const nameCell = el('span', 'name-cell');
+        nameCell.style.paddingLeft = `${depth * INDENT_PX}px`;
+        // Caret if children are known or the server says some exist.
+        const hasChildren = node.children.size > 0 || (node.hasChildren && !node.childrenLoaded);
+        const caret = el('span', 'caret', hasChildren ? '›' : '');
+        caret.setAttribute('aria-hidden', 'true');
+        const icon = el('span', `icon ${node.kind}`, node.kind === 'library' ? '▤' : node.kind === 'file' ? '▧' : '▱');
+        icon.setAttribute('aria-hidden', 'true');
+        const labelWrap = el('span');
+        labelWrap.style.minWidth = '0';
+        // Libraries show as "Site/Documents" plus the site URL (there is no site row).
+        const displayName = node.kind === 'library' ? `${node.siteTitle || 'Site'}/Documents` : node.name;
+        const nameLabel = el('span', 'name', displayName);
+        nameLabel.title = displayName;
+        labelWrap.append(nameLabel);
+        if (node.kind === 'library' && node.siteUrl) {
+          // URL line, with a trim badge at its end when a job is waiting, running or recently failed
+          // (finished and stopped trims are listed in the Trims pane instead).
+          const subline = el('span', 'subline');
+          // Every site is in the same tenant, so show only the site's path (e.g. /sites/Finance);
+          // the full address is in the tooltip. The tenant's home site has no path.
+          const sitePath = node.siteUrl.replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '');
+          const subname = el('span', 'subname', sitePath || t('site.home'));
+          subname.title = node.siteUrl;
+          subline.append(subname);
+          labelWrap.append(subline);
+          const queued = trimQueueBadge(node.siteUrl);
+          if (queued && (queued.active || queued.kind === 'failed')) {
+            const badge = el('button', 'trim-badge' + (queued.kind ? ' ' + queued.kind : ''), queued.label);
+            badge.type = 'button';
+            badge.title = queued.title;
+            badge.addEventListener('click', event => {
+              event.preventDefault();
+              event.stopPropagation();
+              openTrimDialog(node);
+            });
+            subline.append(badge);
+          }
+        }
+        nameCell.append(caret, icon, labelWrap);
+
+        // Bar, on the shared scale.
+        const barCell = el('span', 'bar-cell');
+        const track = el('span', 'bar-track');
+        const fill = el('span', 'bar-fill');
+        // Unmeasured containers show Graph's current size, faded (.partial).
+        const currentOnlyBytes = isContainer && !measured ? (node.graphCurrentBytes || 0) : 0;
+        const barBytes = isContainer && !measured ? currentOnlyBytes : (node.sizeBytes || 0);
+        const percent = barScaleBytes > 0 ? Math.min(100, barBytes / barScaleBytes * 100) : 0;
+        fill.style.width = `${percent}%`;
+        if (barBytes > 0) fill.style.minWidth = '2px';
+        const scaleNote = barScaleBytes > 0
+          ? (barScaleName ? t('bar.scaleNamed', { pct: formatPercent(percent), name: barScaleName }) : t('bar.scale', { pct: formatPercent(percent) }))
+          : t('bar.waiting');
+        // Measured: split the fill into current files and version history.
+        if (isContainer && measured) {
+          const total = Math.max(0, node.sizeBytes || 0);
+          const currentShare = total > 0 ? Math.max(0, Math.min(100, (node.currentFileBytes || 0) / total * 100)) : 0;
+          const currentSegment = el('span', 'bar-segment current');
+          currentSegment.style.width = `${currentShare}%`;
+          const historySegment = el('span', 'bar-segment history');
+          historySegment.style.width = `${100 - currentShare}%`;
+          fill.append(currentSegment, historySegment);
+          fill.title = t('bar.split', { current: fmtBytes(node.currentFileBytes || 0), history: fmtBytes(node.historyOtherEstimateBytes || 0), scale: scaleNote });
+        } else if (isContainer) {
+          fill.classList.add('partial');
+          fill.append(el('span', 'bar-segment current full'));
+          fill.title = t('bar.currentOnly', { scale: scaleNote });
+        } else {
+          fill.append(el('span', 'bar-segment current full'));
+          fill.title = t('bar.file', { scale: scaleNote });
+        }
+        track.append(fill);
+        barCell.append(track);
+
+        // Used size: total, then Current files and Version history lines when measured, else provisional.
+        const sizeCell = el('span', 'size');
+        if (!isContainer) {
+          sizeCell.append(el('span', 'size-main', fmtBytes(node.sizeBytes)));
+        } else if (measured) {
+          sizeCell.append(el('span', 'size-main', fmtBytes(node.sizeBytes)));
+          sizeCell.append(sizeLine('current', t('legend.current'), node.currentFileBytes || 0));
+          sizeCell.append(sizeLine('history', t('size.versions'), node.historyOtherEstimateBytes || 0));
+          sizeCell.title = t('size.tip', { current: fmtBytes(node.currentFileBytes || 0), history: fmtBytes(node.historyOtherEstimateBytes || 0) });
+        } else if (rowMetricError && !rowMetricPending) {
+          sizeCell.append(el('span', 'size-main muted', currentOnlyBytes > 0 ? fmtBytes(currentOnlyBytes) : t('size.unavailable')));
+          const retry = el('button', 'metric-retry', t('size.retry'));
+          retry.type = 'button';
+          retry.title = rowMetricError;
+          // Don't toggle the row; clear the error and re-queue.
+          retry.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            storageMetricErrors.delete(rowMetricKey);
+            enqueueStorageMetric(node);
+            scheduleStorageMetricRender();
+          });
+          sizeCell.append(retry);
+        } else {
+          sizeCell.append(el('span', 'size-main muted', currentOnlyBytes > 0 ? fmtBytes(currentOnlyBytes) : '—'));
+          sizeCell.append(el('span', 'size-note', currentOnlyBytes > 0 ? t('size.currentLoading') : t('size.loading')));
+        }
+
+        // File count (folders and libraries only).
+        const countCell = el('span', 'count', isContainer ? (measured ? node.fileCount.toLocaleString() : '—') : '');
+
+        // Actions.
+        const actionsCell = el('span', 'row-actions');
+        if (node.url) {
+          const link = document.createElement('a');
+          link.className = 'open-link';
+          link.href = node.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          setActionIcon(link, 'open', t('row.openTitle'), t('row.openTitle'));
+          // Don't also toggle the row.
+          link.addEventListener('click', e => e.stopPropagation());
+          actionsCell.append(link);
+        }
+        // Rename, Copy, Move: folders and files only, and only with the service.
+        if ((node.kind === 'folder' || node.kind === 'file') && serviceOnline) {
+          const rename = el('button', 'item-action');
+          rename.type = 'button';
+          setActionIcon(rename, 'rename', t('row.rename'), t('row.renameTitle', { name: node.name }));
+          rename.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            renameFolder(node, parentNode, rename);
+          });
+          actionsCell.append(rename);
+          for (const operation of ['copy', 'move']) {
+            const action = el('button', 'item-action');
+            action.type = 'button';
+            setActionIcon(action, operation,
+              t(operation === 'copy' ? 'transfer.copyTitle' : 'transfer.moveTitle'),
+              t(operation === 'copy' ? 'row.copyTitle' : 'row.moveTitle', { name: node.name }));
+            action.addEventListener('click', event => {
+              event.preventDefault();
+              event.stopPropagation();
+              openTransferPicker(operation, node, parentNode);
+            });
+            actionsCell.append(action);
+          }
+        }
+        // Trim old versions: on library rows, which stand for their site, and only with the service.
+        if (node.kind === 'library' && node.siteUrl && serviceOnline) {
+          const trim = el('button', 'item-action');
+          trim.type = 'button';
+          setActionIcon(trim, 'trim', t('row.trim'), t('row.trimTitle', { name: node.siteTitle || node.siteUrl }));
+          trim.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            openTrimDialog(node);
+          });
+          actionsCell.append(trim);
+        }
+        summary.append(nameCell, barCell, sizeCell, countCell, actionsCell);
+        details.append(summary);
+        // Children are built only if the row is open.
+        details.dataset.depth = String(depth);
+        if (details.open && isContainer) details.append(makeChildBox(node, depth + 1, query));
+        return details;
+      }
+      // Children box: sorted matching children, a status note, and "Show 200 more".
+      function makeChildBox(node, depth, query) {
+        const childBox = el('div', 'children');
+        const children = allChildren(node).filter(c => matches(c, query)).sort(compareNodes);
+        for (const child of children) childBox.append(createRow(child, depth, query, node));
+        const key = folderChildrenKey(node);
+        const pending = folderChildrenPending.has(`${storageMetricGeneration}|${key}`);
+        // Line notes and buttons up with child names: row padding 12 + caret 16 + gap 9 + icon 27 + gap 9.
+        const indent = item => { item.style.marginLeft = `${depth * INDENT_PX + 73}px`; return item; };
+        if (!node.childrenLoaded) {
+          const error = folderChildrenErrors.get(key);
+          childBox.append(indent(el('div', 'child-note', pending ? t('child.loading') : error ? t('child.error', { error }) : t('child.notLoaded'))));
+        } else if (!children.length && !folderChildrenMore.get(key)) {
+          childBox.append(indent(el('div', 'child-note', query ? t('child.noMatches') : t('child.empty'))));
+        }
+        if (node.childrenLoaded && folderChildrenMore.get(key)) {
+          const shown = (folderChildrenCache.get(key) || []).length;
+          const moreButton = el('button', 'load-more-button', pending ? t('more.loading') : t('more.show', { shown: shown.toLocaleString() }));
+          moreButton.type = 'button';
+          moreButton.disabled = pending;
+          moreButton.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            moreButton.disabled = true;
+            moreButton.textContent = t('more.loading');
+            void loadFolderChildren(node, true);
+          });
+          childBox.append(indent(moreButton));
+        }
+        // Slide only once the contents are here, so rows unfold rather than "Loading…".
+        if (revealStarts.has(key) && node.childrenLoaded) {
+          if (revealStarts.get(key) === null) revealStarts.set(key, performance.now());
+          const start = revealStarts.get(key);
+          if (performance.now() - start < REVEAL_MS) childBox.dataset.revealStart = String(start);
+          else revealStarts.delete(key);
+        }
+        return childBox;
+      }
+      // Play (or resume) the slide-down on tagged panes once they are in the page and measurable.
+      function playReveals(container) {
+        for (const box of container.querySelectorAll('.children[data-reveal-start]')) {
+          const elapsed = performance.now() - Number(box.dataset.revealStart);
+          delete box.dataset.revealStart;
+          if (elapsed >= REVEAL_MS) continue;
+          box.style.overflow = 'hidden';
+          const slide = box.animate(
+            [{ height: '0px', opacity: 0, transform: 'translateY(-6px)' },
+             { height: `${box.scrollHeight}px`, opacity: 1, transform: 'none' }],
+            { duration: REVEAL_MS, easing: REVEAL_EASING });
+          slide.currentTime = elapsed;
+          slide.onfinish = slide.oncancel = () => { box.style.overflow = ''; };
+        }
+      }
+      // Row opened: add its children box if missing and queue visible sizes.
+      function populateOpenRow(details, node) {
+        if (details.querySelector(':scope > .children')) return;
+        // The search box runs a full search (runSearch) and no longer filters the tree.
+        const query = '';
+        details.append(makeChildBox(node, Number(details.dataset.depth || 0) + 1, query));
+        playReveals(details);
+        requestVisibleStorageMetrics();
+      }
+      // Rebuild the visible tree from roots, reopening rows that were open.
+      function render() {
+        updateSortHeads();
+        // The search box runs a full search (runSearch) and no longer filters the tree.
+        const query = '';
+        for (const details of treeEl.querySelectorAll('details.node[open]')) {
+          if (details.dataset.nodeKey && !details.dataset.closing) expandedNodeKeys.add(details.dataset.nodeKey);
+        }
+        treeEl.replaceChildren();
+        updateBarScale();
+        // Libraries at top level (no site row). Library nodes are used directly, not
+        // copied, so state such as childrenLoaded survives the next render.
+        const libraries = roots.flatMap(site => allChildren(site).map(library => Object.assign(library, { siteTitle: site.name, siteUrl: site.url })));
+        const visible = libraries.filter(node => matches(node, query))
+          .sort(compareNodes);
+        if (!visible.length) {
+          const empty = el('div', 'empty');
+          empty.append(el('div', 'empty-icon', '⌕'), el('strong', '', t('empty.noMatchTitle')), document.createTextNode(t('empty.noMatchText')));
+          treeEl.append(empty);
+          return;
+        }
+        for (const root of visible) treeEl.append(createRow(root, 0, query));
+        playReveals(treeEl);
+        requestVisibleStorageMetrics();
+      }
+      // Queue sizes for visible rows that lack one, drop queued jobs for hidden rows,
+      // and re-render next frame if anything was queued.
+      function requestVisibleStorageMetrics() {
+        let started = false;
+        const visibleMetricKeys = new Set();
+        for (const details of treeEl.querySelectorAll('details.node')) {
+          let ancestor = details.parentElement.closest('details.node');
+          let visible = true;
+          while (ancestor) {
+            if (!ancestor.open) { visible = false; break; }
+            ancestor = ancestor.parentElement.closest('details.node');
+          }
+          if (visible && details._navigatorNode) {
+            const node = details._navigatorNode;
+            const key = storageMetricKey(node);
+            if (['folder', 'library'].includes(node.kind)) visibleMetricKeys.add(key);
+            if (visible && ['folder', 'library'].includes(node.kind) && !storageMetricCache.has(key) && !storageMetricPending.has(`${storageMetricGeneration}|${key}`) && !storageMetricErrors.has(key)) {
+              enqueueStorageMetric(node);
+              started = true;
+            }
+          }
+        }
+        for (let index = storageMetricQueue.length - 1; index >= 0; index--) {
+          const job = storageMetricQueue[index];
+          if (job.generation === storageMetricGeneration && !visibleMetricKeys.has(job.key)) {
+            storageMetricQueue.splice(index, 1);
+            storageMetricPending.delete(job.pendingKey);
+          }
+        }
+        if (started) requestAnimationFrame(() => render());
+      }
+      // Merge one page of child rows into parent, updating existing nodes in place.
+      function mergeDirectChildRows(parent, rows) {
+        for (const row of rows) {
+          const itemPath = read(row, 'FolderPath');
+          const itemType = read(row, 'ItemType').toLowerCase();
+          if (!itemPath || !['folder', 'file'].includes(itemType)) continue;
+          const parts = segments(itemPath);
+          const name = parts[parts.length - 1];
+          if (!name) continue;
+          const kind = itemType;
+          const item = {
+            sizeBytes: numberValue(read(row, 'SizeBytes')),
+            sizeMB: numberValue(read(row, 'SizeMB')),
+            fileCount: numberValue(read(row, 'FileCount')),
+            path: itemPath,
+            url: buildFolderUrl(parent.siteUrl, itemPath),
+            siteUrl: parent.siteUrl,
+            libraryRootPath: parent.kind === 'library' ? parent.path : parent.libraryRootPath,
+            lastModified: read(row, 'LastModified'),
+            hasChildren: kind === 'folder' && read(row, 'HasChildren').toLowerCase() !== 'false',
+            childCount: numberValue(read(row, 'ChildCount')),
+            // Graph's provisional current size.
+            graphCurrentBytes: numberValue(read(row, 'CurrentBytes'))
+          };
+          let child = parent.children.get(name);
+          if (!child) {
+            child = makeNode(name, kind, item);
+            parent.children.set(name, child);
+          } else {
+            Object.assign(child, item, { kind });
+          }
+          // Folders: index the node, cache any attached StorageMetric, restore listing state.
+          if (kind === 'folder') {
+            const metricKey = storageMetricKey(child);
+            storageMetricNodes.set(metricKey, child);
+            if (row.StorageMetric && typeof row.StorageMetric === 'object') {
+              storageMetricCache.set(metricKey, metricFromValue(row.StorageMetric));
+              storageMetricErrors.delete(metricKey);
+            }
+            child.childrenLoaded = folderChildrenCache.has(folderChildrenKey(child));
+            child.childrenLoading = folderChildrenPending.has(`${storageMetricGeneration}|${folderChildrenKey(child)}`);
+            child.childrenError = folderChildrenErrors.get(folderChildrenKey(child)) || '';
+            child.hasChildren = child.children.size > 0 || Boolean(folderChildrenMore.get(folderChildrenKey(child))) || item.hasChildren;
+            applyStorageMetricToNode(child, storageMetricCache.get(metricKey));
+          }
+        }
+        parent.childrenLoaded = true;
+        parent.childrenLoading = false;
+        parent.childrenError = '';
+        parent.hasChildren = parent.children.size > 0 || Boolean(folderChildrenMore.get(folderChildrenKey(parent)));
+        updateStats();
+      }
+      // Register a subtree's folder and library nodes in storageMetricNodes.
+      function indexStorageMetricNodes(node) {
+        if (['folder', 'library'].includes(node.kind)) storageMetricNodes.set(storageMetricKey(node), node);
+        for (const child of node.children.values()) indexStorageMetricNodes(child);
+      }
+      // Re-index the whole tree; needed after paths change or nodes are replaced.
+      function rebuildStorageMetricNodeIndex() {
+        storageMetricNodes.clear();
+        for (const root of roots) indexStorageMetricNodes(root);
+      }
+      // 'toggle' doesn't bubble, so listen in the capture phase. Closing a row
+      // removes its children and forgets its open descendants.
+      treeEl.addEventListener('toggle', event => {
+        const details = event.target;
+        if (!(details instanceof HTMLDetailsElement) || !details.dataset.nodeKey) return;
+        if (details.open) {
+          expandedNodeKeys.add(details.dataset.nodeKey);
+        }
+        else {
+          delete details.dataset.closing;
+          forgetOpenRows(details.dataset.nodeKey);
+          details.querySelector(':scope > .children')?.remove();
+          // A library collapsed while pinned would otherwise be left above the screen.
+          if (details.parentElement === treeEl && details.getBoundingClientRect().top < 0) {
+            details.scrollIntoView({ block: 'start' });
+          }
+          requestVisibleStorageMetrics();
+        }
+      }, true);
+      // Forget a row and the open rows below it, so they start closed next time.
+      // Compare without the kind prefix: descendants can be a different kind.
+      function forgetOpenRows(nodeKey) {
+        expandedNodeKeys.delete(nodeKey);
+        const withoutKind = key => key.slice(key.indexOf('|') + 1);
+        const closedPrefix = withoutKind(nodeKey) + '/';
+        for (const key of [...expandedNodeKeys]) {
+          if (withoutKind(key).startsWith(closedPrefix)) expandedNodeKeys.delete(key);
+        }
+      }
+      // Slide a pane up, then close its row (the toggle handler does the rest). State is
+      // updated first, so a redraw during the slide simply draws the row closed.
+      function closePane(details, node, pane) {
+        details.dataset.closing = '1';
+        forgetOpenRows(details.dataset.nodeKey);
+        revealStarts.delete(folderChildrenKey(node));
+        for (const running of pane.getAnimations()) running.cancel(); // e.g. still opening
+        pane.style.overflow = 'hidden';
+        const slide = pane.animate(
+          [{ height: `${pane.offsetHeight}px`, opacity: 1, transform: 'none' },
+           { height: '0px', opacity: 0, transform: 'translateY(-6px)' }],
+          { duration: CLOSE_MS, easing: CLOSE_EASING, fill: 'forwards' });
+        slide.onfinish = () => { details.open = false; };
+      }
+      // Browser URL for a server-relative path; segments are re-encoded.
+      function buildFolderUrl(siteUrl, serverPath) {
+        const origin = new URL(siteUrl).origin;
+        const encoded = String(serverPath).split('/').filter(Boolean).map(segment => {
+          try { return encodeURIComponent(decodeURIComponent(segment)); }
+          catch { return encodeURIComponent(segment); }
+        }).join('/');
+        return `${origin}/${encoded}`;
+      }
+      // Path form for comparisons: decoded, no empty segments, lower-case.
+      function pathKey(path) { return segments(path).join('/').toLowerCase(); }
+      // Same format as the row key built in createRow(), for expandedNodeKeys.
+      function folderNodeKey(node) { return node.kind + '|' + (node.siteUrl || '') + '|' + (node.path || node.name); }
+      // Loaded folder/library node at siteUrl + folderPath, or null.
+      function findFolderNode(siteUrl, folderPath) {
+        const wantedSite = String(siteUrl || '').replace(/\/$/, '').toLowerCase();
+        const wantedPath = pathKey(folderPath);
+        let found = null;
+        const visit = node => {
+          if (found) return;
+          if (String(node.siteUrl || '').replace(/\/$/, '').toLowerCase() === wantedSite &&
+              pathKey(node.path) === wantedPath && ['folder', 'library'].includes(node.kind)) {
+            found = node;
+            return;
+          }
+          for (const child of node.children.values()) visit(child);
+        };
+        for (const root of roots) visit(root);
+        return found;
+      }
+      // ---- Copy / Move ----
+      // Open the destination picker. Copy and Move both stay in the item's own library:
+      // the owner doesn't allow transfers between sites, and each site has one library here.
+      function openTransferPicker(operation, node, parentNode) {
+        if (!serviceOnline || !node.path || !node.siteUrl) return;
+        const site = roots.find(root => String(root.url || '').replace(/\/$/, '').toLowerCase() === String(node.siteUrl).replace(/\/$/, '').toLowerCase());
+        const sourceLibraryPath = node.libraryRootPath || getLibraryRootPathForItem(node.path, node.siteUrl);
+        const libraries = (site ? allChildren(site) : [])
+          .filter(item => item.kind === 'library' && item.path && pathKey(item.path) === pathKey(sourceLibraryPath));
+        if (!libraries.length) {
+          window.alert(t('transfer.noLibrary'));
+          return;
+        }
+        // stack: folder path from the library root; pages: listings by pathKey.
+        transferSelection = {
+          operation, node, parentNode, siteUrl: node.siteUrl,
+          libraries, library: libraries[0], stack: [libraries[0].path], pages: new Map()
+        };
+        $('transferTitle').textContent = t(operation === 'copy' ? 'transfer.copyTitle' : 'transfer.moveTitle');
+        $('transferHint').textContent = operation === 'move'
+          ? t('transfer.moveHint', { name: node.name })
+          : t('transfer.copyHint');
+        setActionIcon($('transferUp'), 'up', t('picker.up'), t('picker.up'));
+        $('transferDialog').showModal();
+        renderTransferPicker();
+        void loadTransferFolders(false);
+      }
+      // The folder the picker is showing (top of the stack).
+      function currentTransferPath() {
+        return transferSelection ? transferSelection.stack[transferSelection.stack.length - 1] : '';
+      }
+      // Cached listing of that folder, or null if not requested yet.
+      function currentTransferPage() {
+        return transferSelection ? transferSelection.pages.get(pathKey(currentTransferPath())) || null : null;
+      }
+      // Redraw the picker; buttons are disabled while the page loads.
+      function renderTransferPicker() {
+        if (!transferSelection) return;
+        const path = currentTransferPath();
+        const page = currentTransferPage();
+        // Breadcrumb from the library: "site/Documents › folder › subfolder".
+        const library = transferSelection.library;
+        const below = segments(path).slice(segments(library.path).length);
+        $('transferPath').textContent = [`${library.siteTitle || library.name}/Documents`, ...below].join(' › ');
+        $('transferUp').disabled = transferSelection.stack.length <= 1 || Boolean(page && page.loading);
+        $('transferChoose').disabled = Boolean(page && page.loading);
+        $('transferMore').hidden = !page || !page.more;
+        $('transferMore').disabled = Boolean(page && page.loading);
+        const list = $('transferFolders');
+        list.replaceChildren();
+        if (!page || page.loading) {
+          list.append(el('div', 'picker-message', t('picker.loading')));
+          return;
+        }
+        if (page.error) {
+          list.append(el('div', 'picker-message', page.error));
+          return;
+        }
+        if (!page.folders.length) {
+          list.append(el('div', 'picker-message', page.more ? t('picker.noFoldersPage') : t('picker.noSubfolders')));
+          return;
+        }
+        for (const folder of page.folders) {
+          const button = el('button', 'picker-folder');
+          button.type = 'button';
+          const icon = name => `<svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">${ACTION_ICONS[name]}</svg>`;
+          button.innerHTML = icon('folder') + icon('chevron');
+          // The name goes in as text (not HTML), between the two icons.
+          button.insertBefore(el('span', '', folder.name), button.lastChild);
+          button.addEventListener('click', () => {
+            transferSelection.stack.push(folder.path);
+            renderTransferPicker();
+            void loadTransferFolders(false);
+          });
+          list.append(button);
+        }
+      }
+      // Load subfolders for the picker (own cache); drop the answer if the dialog changed.
+      async function loadTransferFolders(loadMore) {
+        if (!transferSelection) return;
+        const selection = transferSelection;
+        const path = selection.stack[selection.stack.length - 1];
+        const key = pathKey(path);
+        let page = selection.pages.get(key);
+        if (!page) {
+          page = { folders: [], loadedCount: 0, more: false, loading: false, loaded: false, error: '' };
+          selection.pages.set(key, page);
+        }
+        if (page.loading || (loadMore && !page.more)) return;
+        if (page.loaded && !loadMore) {
+          renderTransferPicker();
+          return;
+        }
+        page.loading = true;
+        page.error = '';
+        renderTransferPicker();
+        try {
+          const response = await fetch('/api/folder-children', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              siteUrl: selection.siteUrl,
+              folderPath: path,
+              loadMore,
+              loadedCount: page.loadedCount
+            })
+          });
+          const result = await response.json();
+          if (transferSelection !== selection) return;
+          if (!response.ok || !result.ok) throw new Error(result.error || t('picker.loadFailedStatus', { status: response.status }));
+          for (const row of result.rows || []) {
+            if (read(row, 'ItemType').toLowerCase() === 'folder') {
+              const parts = segments(read(row, 'FolderPath'));
+              page.folders.push({ name: parts[parts.length - 1] || read(row, 'FolderPath'), path: read(row, 'FolderPath') });
+            }
+          }
+          page.loadedCount = Number(result.loadedCount || page.loadedCount);
+          page.more = Boolean(result.nextPageAvailable);
+          page.loaded = true;
+          page.folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+        } catch (error) {
+          page.error = error.message || t('picker.loadFailed');
+        } finally {
+          page.loading = false;
+          if (transferSelection === selection) renderTransferPicker();
+        }
+      }
+      // Clear sizes in a subtree so they are re-measured.
+      function clearNodeMetrics(node) {
+        if (['folder', 'library'].includes(node.kind)) {
+          delete node.sharePointMetric;
+          node.sizeBytes = 0;
+          node.sizeMB = 0;
+          node.fileCount = 0;
+          node.currentFileBytes = 0;
+          node.historyOtherEstimateBytes = 0;
+        }
+        for (const child of node.children.values()) clearNodeMetrics(child);
+      }
+      // After copy/move: new generation, clear caches and sizes, reload affected open folders.
+      async function invalidateAfterTransfer(operation, sourceParent, destinationNode) {
+        // Anything still in flight is now stale.
+        storageMetricGeneration++;
+        storageMetricCache.clear();
+        storageMetricErrors.clear();
+        storageMetricPending.clear();
+        storageMetricQueue.length = 0;
+        folderChildrenCache.clear();
+        folderChildrenMore.clear();
+        folderChildrenErrors.clear();
+        folderChildrenPending.clear();
+        for (const root of roots) clearNodeMetrics(root);
+        // destinationNode is null when that folder was never loaded in the tree.
+        const candidates = operation === 'move' ? [sourceParent, destinationNode] : [destinationNode];
+        const affected = [...new Set(candidates.filter(Boolean))];
+        for (const folder of affected) {
+          // Unloaded but expandable, so they refetch.
+          folder.children.clear();
+          folder.childrenLoaded = false;
+          folder.hasChildren = true;
+        }
+        rebuildStorageMetricNodeIndex();
+        render();
+        // Reload only the affected folders that are open.
+        const reloads = [];
+        for (const folder of affected) {
+          const expanded = expandedNodeKeys.has(folderNodeKey(folder));
+          if (expanded && (operation === 'move' || folder === destinationNode)) reloads.push(loadFolderChildren(folder));
+        }
+        await Promise.all(reloads);
+      }
+      // Confirm and run via /api/transfer; the server refuses if the item changed.
+      async function executeTransfer() {
+        if (!transferSelection) return;
+        const selection = transferSelection;
+        const destinationPath = currentTransferPath();
+        const isCopy = selection.operation === 'copy';
+        const opLabel = t(isCopy ? 'row.copy' : 'row.move');
+        const prompt = t(isCopy ? 'transfer.confirmCopy' : 'transfer.confirmMove', { name: selection.node.name, dest: destinationPath }) +
+          '\n\n' + t(isCopy ? 'transfer.copyWarning' : 'transfer.moveWarning') + '\n\n' + t('common.continue');
+        if (!window.confirm(prompt)) return;
+        $('transferChoose').disabled = true;
+        try {
+          const response = await fetch('/api/transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              operation: selection.operation,
+              siteUrl: selection.siteUrl,
+              itemPath: selection.node.path,
+              destinationPath,
+              expectedModified: selection.node.lastModified || '',
+              expectedSizeBytes: selection.node.kind === 'file' ? selection.node.sizeBytes : null
+            })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.error || t('transfer.failedStatus', { op: opLabel, status: response.status }));
+          const destinationNode = findFolderNode(selection.siteUrl, destinationPath);
+          $('transferDialog').close();
+          transferSelection = null;
+          await invalidateAfterTransfer(selection.operation, selection.parentNode, destinationNode);
+          const message = selection.operation === 'copy' && result.queued
+            ? t('transfer.copyQueued', { name: result.itemName })
+            : t('transfer.done', { op: opLabel, name: result.itemName });
+          setBadgeText('✓ ' + message);
+          $('status').classList.add('success');
+          $('status').textContent = message;
+        } catch (error) {
+          $('transferChoose').disabled = false;
+          window.alert(t('transfer.failed', { op: opLabel, error: error.message }));
+        }
+      }
+      // Picker controls.
+      $('transferUp').addEventListener('click', () => {
+        if (!transferSelection || transferSelection.stack.length <= 1) return;
+        transferSelection.stack.pop();
+        renderTransferPicker();
+        void loadTransferFolders(false);
+      });
+      $('transferMore').addEventListener('click', () => void loadTransferFolders(true));
+      $('transferChoose').addEventListener('click', () => void executeTransfer());
+      $('transferCancel').addEventListener('click', () => $('transferDialog').close());
+      $('transferClose').addEventListener('click', () => $('transferDialog').close());
+      $('transferDialog').addEventListener('close', () => { transferSelection = null; });
+      // ---- Trim queue (which sites have a trim waiting or running) ----
+      // Last answer per site, keyed by lower-cased site URL: { trim, policy } or { error }.
+      // checked: when the last full check finished; loading: one is in flight; error: it failed.
+      const trimQueue = new Map();
+      const trimQueueState = { checked: null, loading: false, error: '' };
+      // A trim that ended within this many days still gets a badge (and a mention in the summary).
+      const TRIM_RECENT_DAYS = 7;
+      const siteKey = url => String(url || '').replace(/\/+$/, '').toLowerCase();
+      // Store one site's state (from the full check or the trim dialog) and redraw.
+      function setTrimQueueEntry(siteUrl, entry) {
+        trimQueue.set(siteKey(siteUrl), entry);
+        updateTrimQueueStat();
+        if (loaded) render();
+      }
+      // Check every site at once. Read-only; sites that can't be checked are counted, not fatal.
+      async function checkTrimQueue() {
+        if (!serviceOnline || trimQueueState.loading) return;
+        trimQueueState.loading = true;
+        trimQueueState.error = '';
+        $('trimQueueButton').disabled = true;
+        updateTrimQueueStat();
+        try {
+          const response = await fetch('/api/trim-queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: '{}'
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result.ok) throw new Error(result.error || t('trim.failedStatus', { status: response.status }));
+          trimQueue.clear();
+          for (const site of result.sites || []) trimQueue.set(siteKey(site.siteUrl), site);
+          trimQueueState.checked = result.checked;
+        } catch (error) {
+          trimQueueState.error = error.message;
+        }
+        trimQueueState.loading = false;
+        $('trimQueueButton').disabled = !serviceOnline || !loaded;
+        updateTrimQueueStat();
+        if (loaded) render();
+      }
+      // Badge for a site's row, or null: a trim waiting/running, else a version-limit change running.
+      // Returns { label, title, kind, active, ended? }: kind is the badge style ('' waiting/running, 'done',
+      // 'failed', 'stopped'); active is true while something is waiting or running.
+      function trimQueueBadge(siteUrl) {
+        const entry = trimQueue.get(siteKey(siteUrl));
+        if (!entry || entry.error) return null;
+        let job = null;
+        let label = '';
+        if (entry.trim && entry.trim.running) {
+          job = entry.trim;
+          label = job.status === 'InProgress' ? t('queue.running') : t('queue.queued');
+        } else if (entry.policy && entry.policy.running) {
+          job = entry.policy;
+          label = t('queue.policy');
+        }
+        if (job) {
+          const title = job.requested ? t('queue.badgeTitle', { state: label, when: fmtWhen(job.requested) }) : t('queue.badgeTitleNoTime', { state: label });
+          return { label, title, state: label, kind: job.status === 'InProgress' ? 'running' : '', active: true,
+            detail: job.requested ? t('trims.since', { when: fmtWhen(job.requested) }) : '' };
+        }
+        // Nothing active: show a trim that ended recently, since small sites finish in minutes.
+        const last = entry.trim;
+        const ended = last && last.exists ? (last.completed || last.lastProcessed || last.requested) : null;
+        if (!ended || Date.now() - new Date(ended).getTime() > TRIM_RECENT_DAYS * 86400000) return null;
+        const status = last.status.toLowerCase();
+        const kind = status.startsWith('complete') && !last.error && !last.versionsFailed ? 'done'
+          : status.startsWith('cancel') ? 'stopped' : 'failed';
+        const date = new Date(ended).toLocaleDateString(lang === 'ko' ? 'ko-KR' : undefined, { month: 'short', day: 'numeric' });
+        return {
+          label: t({ done: 'queue.done', failed: 'queue.trimFailed', stopped: 'queue.stopped' }[kind], { date }),
+          title: t('queue.endedTitle', { when: fmtWhen(ended), deleted: last.versionsDeleted.toLocaleString(), freed: fmtBytes(last.storageReleasedBytes) }),
+          kind, active: false, ended,
+          state: t({ done: 'trims.done', failed: 'trims.failed', stopped: 'trims.stopped' }[kind]),
+          detail: t('trims.result', { when: fmtWhen(ended), deleted: last.versionsDeleted.toLocaleString(), freed: fmtBytes(last.storageReleasedBytes) })
+        };
+      }
+      // Trims toggle in the summary ("Trims 0 active · 7 recent") and the list in the Trims pane.
+      function updateTrimQueueStat() {
+        const count = $('trimQueueCount');
+        const note = $('trimQueueNote');
+        const list = $('trimList');
+        $('trimPanelHint').textContent = trimQueueState.checked ? t('trims.hint', { when: fmtWhen(trimQueueState.checked) }) : '';
+        if (trimQueueState.loading || trimQueueState.error || !trimQueue.size) {
+          count.textContent = '—';
+          note.textContent = trimQueueState.loading ? t('queue.checking') : trimQueueState.error ? t('queue.failed', { error: trimQueueState.error }) : '';
+          list.replaceChildren(el('div', 'trims-empty', note.textContent || t('queue.checking')));
+          return;
+        }
+        // Library rows by site, for names and for opening the trim dialog.
+        const libraries = new Map(roots.flatMap(site => allChildren(site)).filter(n => n.kind === 'library').map(n => [siteKey(n.siteUrl), n]));
+        const entries = [...trimQueue.keys()].map(key => ({ key, node: libraries.get(key), badge: trimQueueBadge(key) })).filter(item => item.badge);
+        const active = entries.filter(item => item.badge.active);
+        // Newest first, so a trim that just finished leads the list.
+        const recent = entries.filter(item => !item.badge.active).sort((a, b) => new Date(b.badge.ended) - new Date(a.badge.ended));
+        const unchecked = [...trimQueue.values()].filter(entry => entry.error).length;
+        count.textContent = t('trims.active', { n: active.length.toLocaleString() });
+        note.textContent = [t('trims.recent', { n: recent.length.toLocaleString() }), unchecked ? t('queue.unchecked', { n: unchecked }) : ''].filter(Boolean).join(' · ');
+        // Pane rows: site, state badge, and when / result.
+        const rows = [...active, ...recent].map(item => {
+          const row = el('div', 'trims-row');
+          const name = el('button', 'trims-site', item.node ? item.node.siteTitle : item.key.split('/').pop());
+          name.type = 'button';
+          name.title = t('row.trimTitle', { name: item.node ? item.node.siteTitle : item.key });
+          name.addEventListener('click', () => openTrimDialog(item.node || { siteUrl: item.key, siteTitle: item.key }));
+          const badge = el('span', 'trim-badge static' + (item.badge.kind ? ' ' + item.badge.kind : ''), item.badge.state);
+          row.append(name, badge, el('span', 'trims-detail', item.badge.detail));
+          return row;
+        });
+        if (unchecked) rows.push(el('div', 'trims-empty', t('trims.unchecked', { n: unchecked })));
+        list.replaceChildren(...(rows.length ? rows : [el('div', 'trims-empty', t('trims.none'))]));
+      }
+      // Open or close the Trims pane; the choice is remembered per browser.
+      function setTrimPanelOpen(open) {
+        $('trimPanel').hidden = !open;
+        $('trimQueueStat').setAttribute('aria-expanded', String(open));
+        saveSetting('spnav-trims-open', open ? '1' : '0');
+      }
+      // ---- Trim old versions (site level) ----
+      // The trim covers every library in a site, so it hangs off the library rows (one per site).
+      // State of the open dialog; null when closed. last: the site's latest job from the service
+      // (null while checking); error: why checking failed; busy: a request is in flight.
+      let trimState = null;
+      // The word to type before Start trim unlocks: the site's last URL segment ("finance"),
+      // or the tenant name for the root site.
+      function trimConfirmWord(siteUrl) {
+        const url = new URL(siteUrl);
+        const segment = decodeURIComponent(url.pathname.replace(/\/+$/, '').split('/').pop() || '');
+        return segment || url.hostname.split('.')[0];
+      }
+      function openTrimDialog(node) {
+        if (!serviceOnline || !node.siteUrl) return;
+        trimState = {
+          siteUrl: node.siteUrl, siteTitle: node.siteTitle || node.siteUrl,
+          word: trimConfirmWord(node.siteUrl), last: null, policy: null, error: '', busy: false
+        };
+        // Each opening starts from the safe defaults: Automatic and an empty confirmation.
+        document.querySelector('input[name="trimMode"][value="automatic"]').checked = true;
+        $('trimConfirm').value = '';
+        renderTrimDialog();
+        $('trimDialog').showModal();
+        void loadTrimStatus();
+      }
+      // POST one trim route; returns the site's latest job or throws with the service's message.
+      async function trimRequest(path, body) {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+          body: JSON.stringify(body)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || t('trim.failedStatus', { status: response.status }));
+        // Every answer is the site's current state, so the row badge and summary follow it too.
+        setTrimQueueEntry(body.siteUrl, { trim: result.trim, policy: result.policy });
+        return result;
+      }
+      // Ask the service for the site's latest job; the answer is dropped if the dialog moved on.
+      async function loadTrimStatus() {
+        const state = trimState;
+        if (!state) return;
+        state.last = null;
+        state.policy = null;
+        state.error = '';
+        renderTrimDialog();
+        try {
+          const result = await trimRequest('/api/trim-status', { siteUrl: state.siteUrl });
+          if (trimState === state) { state.last = result.trim; state.policy = result.policy; }
+        } catch (error) {
+          if (trimState === state) state.error = error.message;
+        }
+        if (trimState === state) renderTrimDialog();
+      }
+      // Date and time in the page language.
+      function fmtWhen(iso) {
+        const date = new Date(iso);
+        return Number.isNaN(date.getTime()) ? String(iso) : date.toLocaleString(lang === 'ko' ? 'ko-KR' : undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      }
+      // Plain description of a job's rule (unknown modes show as SharePoint names them).
+      function trimRuleText(job) {
+        if (job.mode === 'DeleteOlderThanDays' && job.deleteOlderThan) {
+          return t('trim.rule.DeleteOlderThanDays', { date: new Date(job.deleteOlderThan).toLocaleDateString(lang === 'ko' ? 'ko-KR' : undefined, { dateStyle: 'medium' }) });
+        }
+        if (job.mode === 'CountLimits') return t('trim.rule.CountLimits', { major: job.majorVersionLimit });
+        return I18N.en['trim.rule.' + job.mode] ? t('trim.rule.' + job.mode) : job.mode;
+      }
+      // Read and check the chosen rule. Returns { body } for the service, or { error } to show.
+      function readTrimRule() {
+        const mode = document.querySelector('input[name="trimMode"]:checked')?.value || 'automatic';
+        // Whole numbers only; '' or '1.5' fail.
+        const whole = id => (/^\d+$/.test($(id).value.trim()) ? Number($(id).value.trim()) : NaN);
+        if (mode === 'days') {
+          const days = whole('trimDays');
+          if (!(days >= 30 && days <= 36500)) return { error: t('trim.errDays') };
+          return { body: { mode, days } };
+        }
+        if (mode === 'count') {
+          const majorVersions = whole('trimMajor');
+          const minorVersions = whole('trimMinor');
+          if (!(majorVersions >= 1 && majorVersions <= 50000)) return { error: t('trim.errMajor') };
+          if (!(minorVersions >= 0 && minorVersions <= majorVersions)) return { error: t('trim.errMinor') };
+          return { body: { mode, majorVersions, minorVersions } };
+        }
+        return { body: { mode } };
+      }
+      // Redraw the dialog from trimState: last job, input check, and which buttons work.
+      function renderTrimDialog() {
+        const state = trimState;
+        if (!state) return;
+        // Title plus the exact URL the trim will act on, so the target is never ambiguous.
+        $('trimHint').replaceChildren(el('div', '', t('trim.hint', { site: state.siteTitle })), el('div', 'trim-url', state.siteUrl));
+        // Last job.
+        const last = $('trimLast');
+        last.replaceChildren();
+        if (state.error) {
+          last.append(el('span', 'trim-job-error', t('trim.loadFailed', { error: state.error })));
+        } else if (!state.last) {
+          last.append(el('span', 'muted', t('trim.loading')));
+        } else if (!state.last.exists) {
+          last.append(el('span', 'muted', t('trim.none')));
+        } else {
+          const job = state.last;
+          const stateKey = 'trim.state.' + job.status;
+          const line1 = el('div');
+          line1.append(el('span', 'trim-state', I18N.en[stateKey] ? t(stateKey) : job.status), document.createTextNode(' · ' + trimRuleText(job)));
+          const times = [];
+          if (job.requested) times.push(t('trim.requested', { when: fmtWhen(job.requested) }));
+          if (job.completed && !job.running) times.push(t('trim.finished', { when: fmtWhen(job.completed) }));
+          else if (job.lastProcessed) times.push(t('trim.lastWork', { when: fmtWhen(job.lastProcessed) }));
+          const parts = [t('trim.result', { deleted: job.versionsDeleted.toLocaleString(), freed: fmtBytes(job.storageReleasedBytes) })];
+          if (job.versionsFailed > 0) parts.push(t('trim.failedVersions', { n: job.versionsFailed.toLocaleString() }));
+          last.append(line1, el('div', 'muted', times.join(' · ')), el('div', '', parts.join(' · ')));
+          if (job.error) last.append(el('div', 'trim-job-error', job.error));
+        }
+        // A version-limit change in progress is shown under the last trim (it can delete versions too).
+        if (state.policy && state.policy.running) {
+          last.append(el('div', 'trim-job-error', t('trim.policyRunning', { when: state.policy.requested ? fmtWhen(state.policy.requested) : '—' })));
+        }
+        // Rule check; a running job also blocks a new one (SharePoint allows one per site).
+        const running = Boolean(state.last && state.last.running);
+        const policyRunning = Boolean(state.policy && state.policy.running);
+        const rule = readTrimRule();
+        $('trimInputError').textContent = rule.error || (running ? t('trim.busyRunning') : policyRunning ? t('trim.busyPolicy') : '');
+        // Confirmation: "Type <word> to confirm", with the word set apart.
+        const label = $('trimConfirmLabel');
+        const [before, after] = t('trim.confirmLabel').split('{word}');
+        label.replaceChildren(document.createTextNode(before ?? ''), el('code', '', state.word), document.createTextNode(after ?? ''));
+        const confirmed = $('trimConfirm').value.trim().toLowerCase() === state.word.toLowerCase();
+        // Start needs: status known, nothing running, a valid rule, the word typed, and no request in flight.
+        $('trimStart').disabled = state.busy || !state.last || running || policyRunning || Boolean(rule.error) || !confirmed;
+        $('trimStop').hidden = !running;
+        $('trimStop').disabled = state.busy;
+        $('trimRefresh').disabled = state.busy;
+      }
+      // Queue the trim, then show the new job in the dialog and the status line.
+      async function startTrim() {
+        const state = trimState;
+        const rule = readTrimRule();
+        if (!state || rule.error || $('trimStart').disabled) return;
+        state.busy = true;
+        renderTrimDialog();
+        try {
+          const result = await trimRequest('/api/trim-start', { siteUrl: state.siteUrl, ...rule.body });
+          if (trimState === state) {
+            state.last = result.trim;
+            state.policy = result.policy;
+            $('trimConfirm').value = '';
+          }
+          const message = t('trim.queued', { site: state.siteTitle });
+          setBadgeText('✓ ' + message);
+          $('status').classList.add('success');
+          $('status').textContent = message;
+        } catch (error) {
+          window.alert(t('trim.failed', { error: error.message }));
+        }
+        state.busy = false;
+        if (trimState === state) renderTrimDialog();
+      }
+      // Stop a queued or running trim after a confirmation.
+      async function stopTrim() {
+        const state = trimState;
+        if (!state || !window.confirm(t('trim.confirmStop', { site: state.siteTitle }))) return;
+        state.busy = true;
+        renderTrimDialog();
+        try {
+          const result = await trimRequest('/api/trim-cancel', { siteUrl: state.siteUrl });
+          if (trimState === state) { state.last = result.trim; state.policy = result.policy; }
+          const message = t('trim.stopped', { site: state.siteTitle });
+          $('status').classList.add('success');
+          $('status').textContent = message;
+        } catch (error) {
+          window.alert(t('trim.failed', { error: error.message }));
+        }
+        state.busy = false;
+        if (trimState === state) renderTrimDialog();
+      }
+      // Dialog controls. Typing in a number box also selects its rule (clicks inside a label's
+      // text box don't pick the label's radio button).
+      for (const id of ['trimDays', 'trimMajor', 'trimMinor']) {
+        $(id).addEventListener('focus', () => { $(id).closest('.trim-rule').querySelector('input[type="radio"]').checked = true; renderTrimDialog(); });
+        $(id).addEventListener('input', () => renderTrimDialog());
+      }
+      $('trimRules').addEventListener('change', () => renderTrimDialog());
+      $('trimConfirm').addEventListener('input', () => renderTrimDialog());
+      // Enter in the confirmation box starts the trim only if Start trim is enabled.
+      $('trimConfirm').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); void startTrim(); } });
+      $('trimStart').addEventListener('click', () => void startTrim());
+      $('trimStop').addEventListener('click', () => void stopTrim());
+      $('trimRefresh').addEventListener('click', () => void loadTrimStatus());
+      $('trimCancel').addEventListener('click', () => $('trimDialog').close());
+      $('trimClose').addEventListener('click', () => $('trimDialog').close());
+      $('trimDialog').addEventListener('close', () => { trimState = null; });
+      // ---- Rename ----
+      // Rewrite paths and URLs from oldPrefix to newPrefix in a subtree.
+      function updateRenamedPath(node, oldPrefix, newPrefix, siteUrl) {
+        if (node.path === oldPrefix || node.path.startsWith(oldPrefix + '/')) {
+          node.path = newPrefix + node.path.slice(oldPrefix.length);
+          node.url = buildFolderUrl(siteUrl, node.path);
+        }
+        for (const child of node.children.values()) updateRenamedPath(child, oldPrefix, newPrefix, siteUrl);
+      }
+      // Two steps: /api/inspect returns a fresh preview to confirm, then /api/rename.
+      async function renameFolder(node, parentNode, button) {
+        if (!serviceOnline || !node.path) return;
+        const itemType = node.kind;
+        const nextName = window.prompt(t(itemType === 'file' ? 'rename.promptFile' : 'rename.promptFolder'), node.name);
+        if (nextName == null) return;
+        const newName = nextName.trim();
+        if (!newName || newName === node.name) return;
+        // Characters SharePoint rejects; checked here to fail early.
+        if (/[\\/:*?"<>|]/.test(newName) || /[. ]$/.test(newName)) {
+          window.alert(t('rename.invalid'));
+          return;
+        }
+        button.disabled = true;
+        try {
+          // What the page shows, so the server can flag changes (folders: only if measured).
+          const expectedGraphSize = itemType === 'file'
+            ? (node.sizeBytes || 0)
+            : node.sharePointMetric ? node.sharePointMetric.totalFileStreamSize : null;
+          const previewResponse = await fetch('/api/inspect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              siteUrl: node.siteUrl,
+              itemPath: node.path,
+              itemType,
+              newName,
+              expectedModified: node.lastModified || '',
+              expectedSizeBytes: expectedGraphSize,
+              expectedFileCount: node.sharePointMetric ? node.fileCount : null
+            })
+          });
+          const preview = await previewResponse.json();
+          if (!previewResponse.ok || !preview.ok) throw new Error(preview.error || t('rename.checkFailed', { status: previewResponse.status }));
+          // Changed if the server says so or any value shown here differs.
+          const reportChanged =
+            preview.changedSinceReport ||
+            (node.lastModified && preview.modified && new Date(node.lastModified).getTime() !== new Date(preview.modified).getTime()) ||
+            (expectedGraphSize != null && Number(expectedGraphSize) !== Number(preview.sizeBytes || 0)) ||
+            (itemType === 'folder' && node.sharePointMetric && Number(node.fileCount || 0) !== Number(preview.fileCount || 0));
+          const changedNote = reportChanged
+            ? '\n\n' + t('rename.changed')
+            : '\n\n' + t('rename.unchanged');
+          const previewDetails = `${t(itemType === 'file' ? 'rename.file' : 'rename.folder')}: ${preview.name}\n${t('rename.path')}: ${preview.path}\n${t('rename.modified')}: ${preview.modified || t('rename.unknown')}\n${itemType === 'file' ? `${t('rename.size')}: ${fmtBytes(preview.sizeBytes)}` : `${t('rename.filesInside')}: ${Number(preview.fileCount || 0).toLocaleString()}`}${changedNote}\n\n${t('rename.to')}: ${newName}\n\n${t('common.continue')}`;
+          if (!window.confirm(previewDetails)) return;
+          const response = await fetch('/api/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({ inspectionId: preview.inspectionId, newName })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.error || t('rename.failedStatus', { status: response.status }));
+          // Update in place: re-key under the new name and rewrite paths below.
+          const oldPath = node.path;
+          const newPath = result.newPath || oldPath.slice(0, oldPath.lastIndexOf('/') + 1) + newName;
+          if (parentNode) {
+            parentNode.children.delete(node.name);
+            node.name = newName;
+            parentNode.children.set(newName, node);
+          }
+          updateRenamedPath(node, oldPath, newPath, node.siteUrl);
+          // Paths changed: new generation, clear caches, re-index.
+          storageMetricGeneration++;
+          storageMetricCache.clear();
+          storageMetricErrors.clear();
+          folderChildrenCache.clear();
+          folderChildrenMore.clear();
+          folderChildrenErrors.clear();
+          storageMetricPending.clear();
+          storageMetricQueue.length = 0;
+          rebuildStorageMetricNodeIndex();
+          folderChildrenPending.clear();
+          render();
+          setBadge('badge.renamed', { name: newName });
+        } catch (error) {
+          window.alert(t('rename.failed', { error: error.message }));
+          button.disabled = false;
+        }
+      }
+      // ---- Formatting ----
+      // Human-readable bytes in binary units (1 KB = 1024 B).
+      function fmtBytes(bytes) {
+        const value = Number(bytes || 0);
+        if (value >= 1099511627776) return `${(value / 1099511627776).toFixed(2)} TB`;
+        if (value >= 1073741824) return `${(value / 1073741824).toFixed(2)} GB`;
+        if (value >= 1048576) return `${(value / 1048576).toFixed(1)} MB`;
+        if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+        return `${value} B`;
+      }
+      // Short site name: last path segment, or "Home site".
+      function siteLabel(siteUrl) {
+        const path = String(siteUrl || '').replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '');
+        return path ? path.split('/').pop() : t('site.home');
+      }
+      // Plain-language reason for a skipped site, from the server's message.
+      function skipReason(message) {
+        const text = String(message || '');
+        if (/HTTP 403|Access denied/i.test(text)) return t('reason.noAccess');
+        if (/HTTP 404/i.test(text)) return t('reason.notFound');
+        return t('reason.error');
+      }
+      // ---- Loading panel & service status ----
+      // Draw scan progress (capped at 99% until complete); "done" collapses the panel.
+      function updateScanDisplay(progress, rowCount = scanRecords.length) {
+        const total = Number(progress.totalSites || 0);
+        const complete = Number(progress.completedSites || 0);
+        const finished = progress.status === 'complete';
+        const percent = finished ? 100 : total ? Math.min(99, Math.round(complete / total * 100)) : 0;
+        $('scanPercent').textContent = `${percent}%`;
+        $('scanFill').style.width = `${progress.running && percent === 0 ? 2 : percent}%`;
+        $('scanFill').classList.toggle('scanning', Boolean(progress.running));
+        $('scanFill').parentElement.setAttribute('aria-valuenow', String(percent));
+        $('scanPanel').classList.toggle('done', finished);
+        scanTextState = null;
+        lastProgress = { progress, rowCount };
+        $('scanTitle').textContent = finished ? t('scan.loaded') : progress.status === 'error' ? t('scan.failed') : t('scan.loading');
+        $('scanMessage').textContent = progress.currentSite && !finished
+          ? t('scan.reading', { site: siteLabel(progress.currentSite) })
+          : finished ? t('scan.openHint') : t('scan.connectingShort');
+        $('scanCounter').textContent = t(rowCount === 1 ? 'scan.counterOne' : 'scan.counter',
+          { done: complete.toLocaleString(), total: total.toLocaleString(), libs: rowCount.toLocaleString() });
+        skippedSites = Array.isArray(progress.errors) ? progress.errors : [];
+        const errorsEl = $('scanErrors');
+        errorsEl.hidden = !skippedSites.length;
+        errorsEl.textContent = skippedSites.length
+          ? t(skippedSites.length === 1 ? 'scan.skippedOne' : 'scan.skippedMany', {
+              n: skippedSites.length,
+              items: skippedSites.map(item => `${siteLabel(item.siteUrl)} (${skipReason(item.message)})`).join(', ')
+            })
+          : '';
+        errorsEl.title = skippedSites.map(item => `${item.siteUrl}: ${item.message}`).join('\n');
+      }
+      // ---- Auto-stop session stream ----
+      // One event stream per tab; the app stops itself when the last one closes.
+      let sessionStream = null;
+      // Open the stream once. EventSource cannot send headers, so the token goes
+      // in the query string.
+      function startSessionStream() {
+        if (sessionStream || !window.EventSource) return;
+        sessionStream = new EventSource(`/api/session-events?token=${encodeURIComponent(serviceToken)}`);
+        sessionStream.onerror = () => {
+          // EventSource retries by itself; check whether the app is still there.
+          window.setTimeout(async () => {
+            try {
+              const response = await fetch('/api/status', { headers: { 'X-Local-Token': serviceToken } });
+              if (response.ok) return;
+            } catch {}
+            // The service is gone. React only once; onerror can fire repeatedly.
+            if (!serviceOnline) return;
+            serviceOnline = false;
+            stopServiceButton.classList.add('hidden');
+            setBadge('badge.stopped');
+            setScanState('scan.stoppedTitle', { key: 'scan.stoppedMsg' });
+            sessionStream.close();
+            render();
+          }, 2500);
+        };
+      }
+      // ---- Loading panel & service status (continued) ----
+      // Start-up check: needs http on localhost and a real token; then stream and scan.
+      async function checkLocalService() {
+        if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname) || serviceToken.startsWith('__')) {
+          setBadge('badge.openFromApp');
+          return;
+        }
+        try {
+          const response = await fetch('/api/status', { headers: { 'X-Local-Token': serviceToken } });
+          const status = await response.json();
+          serviceOnline = response.ok && status.connected === true;
+          setBadge(serviceOnline ? 'badge.connected' : 'badge.notConnected');
+          if (status.tenantId) {
+            $('tenantLabel').textContent = `${status.tenantId}.sharepoint.com`;
+            $('headTenant').textContent = `${status.tenantId}.sharepoint.com`;
+          }
+          knownSiteCount = Number(status.siteCount || 0);
+          stopServiceButton.classList.toggle('hidden', !serviceOnline);
+          refreshReportButton.disabled = !serviceOnline;
+          if (serviceOnline) startSessionStream();
+          if (serviceOnline && !loaded) {
+            updateScanDisplay({ status: 'scanning', running: true, totalSites: status.siteCount, completedSites: 0 });
+            await loadLatestReport();
+          }
+          if (loaded) render();
+        } catch {
+          serviceOnline = false;
+          stopServiceButton.classList.add('hidden');
+          setBadge('badge.notRunning');
+          setScanState('scan.notRunningTitle', { key: 'scan.notRunningMsg' });
+        }
+      }
+      // Stop app: ask the service to shut down, then show the stopped state.
+      stopServiceButton.addEventListener('click', async () => {
+        if (!serviceOnline || !window.confirm(t('confirm.stop'))) return;
+        stopServiceButton.disabled = true;
+        try {
+          await fetch('/api/stop', { method: 'POST', headers: { 'X-Local-Token': serviceToken } });
+          if (sessionStream) sessionStream.close();
+          serviceOnline = false;
+          setBadge('badge.stopped');
+          stopServiceButton.classList.add('hidden');
+          setScanState('scan.stoppedTitle', { key: 'scan.stoppedMsg' });
+          render();
+        } catch {
+          setBadge('badge.stopFailed');
+          stopServiceButton.disabled = false;
+        }
+      });
+      // ---- Library loading (scan) ----
+      // (Re)load libraries: new generation, POST /api/scan, poll /api/progress every 800 ms.
+      async function loadLatestReport() {
+        if (!serviceOnline || scanRunning) return;
+        refreshReportButton.disabled = true;
+        scanRunning = true;
+        scanCursor = 0;
+        scanRecords = [];
+        // Requests from before this reload will be ignored.
+        storageMetricGeneration++;
+        storageMetricCache.clear();
+        storageMetricErrors.clear();
+        storageMetricPending.clear();
+        storageMetricQueue.length = 0;
+        folderChildrenCache.clear();
+        folderChildrenMore.clear();
+        folderChildrenErrors.clear();
+        folderChildrenPending.clear();
+        $('status').classList.remove('success');
+        $('status').textContent = '';
+        largestMeasuredBytes = 0;
+        updateScanDisplay({ status: 'scanning', running: true, totalSites: knownSiteCount, completedSites: 0 });
+        try {
+          const startResponse = await fetch('/api/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: '{}'
+          });
+          const start = await startResponse.json();
+          if (!startResponse.ok || !start.ok) throw new Error(start.error || t('err.startLoading', { status: startResponse.status }));
+          let finished = false;
+          // Poll until the scan completes or fails, or the service goes away.
+          while (serviceOnline && !finished) {
+            await new Promise(resolve => setTimeout(resolve, 800));
+            const progressResponse = await fetch(`/api/progress?cursor=${scanCursor}`, { headers: { 'X-Local-Token': serviceToken } });
+            const progress = await progressResponse.json();
+            if (!progressResponse.ok) throw new Error(progress.error || t('err.progress', { status: progressResponse.status }));
+            // New rows: store them, advance the cursor, rebuild.
+            if (Array.isArray(progress.rows) && progress.rows.length) {
+              scanRecords.push(...progress.rows);
+              scanCursor = progress.nextCursor;
+              loadRecords(scanRecords, true);
+            }
+            updateScanDisplay(progress);
+            if (progress.status === 'complete') {
+              finished = true;
+              // One last rebuild with the complete set of rows.
+              if (scanRecords.length) loadRecords(scanRecords, true);
+              // Then see which sites have a trim waiting or running (read-only, doesn't block anything).
+              void checkTrimQueue();
+
+            } else if (progress.status === 'error') {
+              finished = true;
+              throw new Error(progress.error || t('err.loadFailed'));
+            }
+          }
+        } catch (err) {
+          setScanState('scan.failed', err.message ? { text: err.message } : { key: 'err.couldntLoad' });
+          $('status').textContent = err.message || t('err.couldntLoad');
+        } finally {
+          scanRunning = false;
+          refreshReportButton.disabled = !serviceOnline;
+        }
+      }
+      // ---- Search (all libraries) ----
+      // Enter in the search box asks the app for one block of results from SharePoint's search
+      // index (/api/search), across every site at once. The results replace the tree until Back,
+      // Esc or clearing the box. Each result can be opened in SharePoint or shown in the tree.
+      const searchView = $('searchView');
+      const treePanel = searchView.closest('.tree-panel');
+      const searchFilters = { scope: $('searchScope'), type: $('searchType'), size: $('searchSize'), modified: $('searchModified'), sort: $('searchSort') };
+      // Results so far, the index's total, where the next block starts, and a counter (seq)
+      // that lets a newer search discard replies to an older one.
+      const searchState = { active: false, query: '', rows: [], total: 0, nextFrom: 0, more: false, loading: false, error: '', seq: 0 };
+      // Fill "Where" with All sites plus each loaded site by name, keeping the current choice.
+      function fillSearchScope() {
+        const select = searchFilters.scope;
+        const current = select.value;
+        const sites = [...roots].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+        select.replaceChildren(new Option(t('search.allSites'), ''), ...sites.map(site => new Option(site.name, site.url)));
+        select.value = sites.some(site => site.url === current) ? current : '';
+      }
+      // Swap the tree for the results (or back). The tree keeps its state underneath.
+      function setSearchOpen(open) {
+        searchState.active = open;
+        searchView.hidden = !open;
+        treePanel.classList.toggle('searching', open);
+      }
+      // Back to the tree; a reply still on its way is dropped.
+      function closeSearch() {
+        searchState.seq++;
+        searchState.loading = false;
+        setSearchOpen(false);
+      }
+      // Run the search in the box (append = load the next block of the same search).
+      async function runSearch(append = false) {
+        const query = append ? searchState.query : searchEl.value.trim();
+        // An empty box only searches when results are already open (filters alone, e.g. "Over 1 GB").
+        if (!serviceOnline || (!query && !searchState.active)) return;
+        if (!searchState.active) { fillSearchScope(); setSearchOpen(true); }
+        const seq = ++searchState.seq;
+        if (!append) Object.assign(searchState, { query, rows: [], total: 0, nextFrom: 0, more: false });
+        searchState.error = '';
+        searchState.loading = true;
+        renderSearch();
+        try {
+          const response = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              query, siteUrl: searchFilters.scope.value, type: searchFilters.type.value, size: searchFilters.size.value,
+              modified: searchFilters.modified.value, sort: searchFilters.sort.value, from: append ? searchState.nextFrom : 0
+            })
+          });
+          const value = await response.json();
+          if (!response.ok || !value.ok) throw new Error(value.error || t('search.failed', { status: response.status }));
+          if (seq !== searchState.seq) return;
+          searchState.rows.push(...(Array.isArray(value.rows) ? value.rows : []));
+          searchState.total = numberValue(value.total);
+          searchState.nextFrom = numberValue(value.nextFrom);
+          searchState.more = Boolean(value.moreAvailable);
+        } catch (err) {
+          if (seq === searchState.seq) searchState.error = err.message || t('search.failedGeneric');
+        } finally {
+          if (seq === searchState.seq) {
+            searchState.loading = false;
+            renderSearch();
+          }
+        }
+      }
+      // The tree's library node that holds a result, or null (another library, or a site not loaded).
+      function libraryForResult(result) {
+        if (!result.inSiteList) return null;
+        const site = String(result.siteUrl || '').replace(/\/$/, '').toLowerCase();
+        const itemKey = pathKey(result.itemPath);
+        for (const siteNode of roots) {
+          for (const library of siteNode.children.values()) {
+            if (String(library.siteUrl || '').replace(/\/$/, '').toLowerCase() !== site || !library.path) continue;
+            if (itemKey.startsWith(pathKey(library.path) + '/')) return library;
+          }
+        }
+        return null;
+      }
+      // "Site/Documents / folder / subfolder" for a result's parent folder, as the tree names it.
+      function resultLocation(result, library) {
+        const parents = segments(result.itemPath).slice(0, -1);
+        if (library) return [`${library.siteTitle || result.siteTitle}/Documents`, ...parents.slice(segments(library.path).length)].join(' / ');
+        let siteSegs = [];
+        try { siteSegs = segments(new URL(result.siteUrl).pathname); } catch {}
+        return [result.siteTitle || result.siteUrl, ...parents.slice(siteSegs.length)].filter(Boolean).join(' / ');
+      }
+      // Draw the summary line, the result rows, and "Show 50 more".
+      function renderSearch() {
+        const { rows, total, query, loading, error, more } = searchState;
+        $('searchSummary').textContent = loading && !rows.length ? t('search.searching')
+          : !query ? t('search.countAll', { n: total.toLocaleString() })
+          : t(total === 1 ? 'search.countOne' : 'search.count', { n: total.toLocaleString(), q: query });
+        const list = $('searchResults');
+        list.replaceChildren();
+        for (const result of rows) list.append(createSearchRow(result));
+        if (error) list.append(el('div', 'search-error', error));
+        else if (!loading && !rows.length) {
+          const empty = el('div', 'empty');
+          empty.append(el('div', 'empty-icon', '⌕'), el('strong', '', t('search.noneTitle')), document.createTextNode(t('search.noneText')));
+          list.append(empty);
+        }
+        const foot = $('searchFoot');
+        foot.replaceChildren();
+        if (more || (loading && rows.length)) {
+          const button = el('button', 'load-more-button', loading ? t('more.loading') : t('search.more', { shown: rows.length.toLocaleString(), total: total.toLocaleString() }));
+          button.type = 'button';
+          button.disabled = loading;
+          button.addEventListener('click', () => void runSearch(true));
+          foot.append(button);
+        }
+      }
+      // One result row: name, location, size, date, then Show in tree and Open.
+      function createSearchRow(result) {
+        const library = libraryForResult(result);
+        const row = el('div', 'row search-row');
+        const nameCell = el('span', 'name-cell');
+        const icon = el('span', `icon ${result.isFolder ? 'folder' : 'file'}`, result.isFolder ? '▱' : '▧');
+        icon.setAttribute('aria-hidden', 'true');
+        const name = el('span', 'name', result.name);
+        name.title = result.name;
+        nameCell.append(icon, name);
+        const location = resultLocation(result, library);
+        const where = el('span', 'search-where', location);
+        where.title = location;
+        // Folders have no size in the search index (sizeBytes null).
+        const size = el('span', 'size', result.sizeBytes == null ? '—' : fmtBytes(numberValue(result.sizeBytes)));
+        const modifiedDate = result.lastModified ? new Date(result.lastModified) : null;
+        const modified = el('span', 'count', modifiedDate && !Number.isNaN(modifiedDate.getTime())
+          ? modifiedDate.toLocaleDateString(lang === 'ko' ? 'ko-KR' : undefined, { dateStyle: 'medium' }) : '');
+        if (result.lastModified) modified.title = fmtWhen(result.lastModified);
+        const actions = el('span', 'row-actions');
+        const reveal = el('button', 'item-action');
+        reveal.type = 'button';
+        setActionIcon(reveal, 'reveal', library ? t('search.reveal') : t('search.notInTree'), t('search.revealTitle', { name: result.name }));
+        reveal.disabled = !library;
+        reveal.addEventListener('click', () => void revealInTree(result));
+        const open = document.createElement('a');
+        open.className = 'open-link';
+        // Built from the path, segment by segment: the raw webUrl can hold unencoded "#" or spaces.
+        open.href = buildFolderUrl(result.webUrl, result.itemPath);
+        open.target = '_blank';
+        open.rel = 'noopener noreferrer';
+        setActionIcon(open, 'open', t('row.openTitle'), t('row.openTitle'));
+        actions.append(reveal, open);
+        row.append(nameCell, where, size, modified, actions);
+        return row;
+      }
+      // A folder's child by name (case-insensitive), loading its listing and further pages
+      // until the child turns up. Only direct children are fetched, one folder at a time.
+      async function loadedChild(parent, name) {
+        const wanted = name.toLowerCase();
+        const key = folderChildrenKey(parent);
+        let tried = false;
+        for (let attempt = 0; attempt < 1000; attempt++) {
+          const match = [...parent.children.values()].find(child => child.name.toLowerCase() === wanted);
+          if (match) return match;
+          // Another request (e.g. the user opening it) is loading this folder: wait for it.
+          if (folderChildrenPending.has(`${storageMetricGeneration}|${key}`)) {
+            await new Promise(resolve => setTimeout(resolve, 150));
+            continue;
+          }
+          if (tried && folderChildrenErrors.has(key)) return null;
+          tried = true;
+          if (!folderChildrenCache.has(key)) await loadFolderChildren(parent);
+          else if (folderChildrenMore.get(key)) await loadFolderChildren(parent, true);
+          else return null;
+        }
+        return null;
+      }
+      // Show a result in the tree: back to the tree, open its library and each folder on the
+      // way down, then scroll to the item and highlight it. Its own row stays closed.
+      async function revealInTree(result) {
+        const library = libraryForResult(result);
+        if (!library) return;
+        closeSearch();
+        $('status').textContent = '';
+        const names = segments(result.itemPath).slice(segments(library.path).length);
+        expandedNodeKeys.add(folderNodeKey(library));
+        let parent = library;
+        let target = library;
+        for (let index = 0; index < names.length; index++) {
+          const child = await loadedChild(parent, names[index]);
+          if (!child) {
+            $('status').textContent = t('search.revealMissing', { name: result.name });
+            break;
+          }
+          target = child;
+          if (index < names.length - 1) {
+            expandedNodeKeys.add(folderNodeKey(child));
+            parent = child;
+          }
+        }
+        render();
+        const details = [...treeEl.querySelectorAll('details.node')].find(item => item.dataset.nodeKey === folderNodeKey(target));
+        const summary = details?.querySelector(':scope > summary');
+        if (!summary) return;
+        summary.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        // Restart the highlight even if this row was highlighted a moment ago.
+        summary.classList.remove('flash');
+        void summary.offsetWidth;
+        summary.classList.add('flash');
+        summary.focus({ preventScroll: true });
+      }
+
+      // ---- Summary stats ----
+      // Fill the summary strip; totals count measured libraries only.
+      function updateStats() {
+        const libraries = roots.flatMap(site => allChildren(site).filter(node => node.kind === 'library'));
+        const measured = libraries.filter(node => node.sharePointMetric);
+        const used = measured.reduce((sum, node) => sum + (node.sizeBytes || 0), 0);
+        const history = measured.reduce((sum, node) => sum + (node.historyOtherEstimateBytes || 0), 0);
+        $('usedTotal').textContent = measured.length ? fmtBytes(used) : '—';
+        // While sizes are still arriving, say how many libraries the total covers.
+        $('usedNote').textContent = libraries.length && measured.length < libraries.length
+          ? t('stats.measured', { m: measured.length, n: libraries.length }) : '';
+        $('historyTotal').textContent = measured.length ? fmtBytes(history) : '—';
+        $('historyNote').textContent = used > 0 ? t('stats.historyShare', { pct: formatPercent(history / used * 100) }) : '';
+        updateTrimQueueStat();
+      }
+      // ---- Building the tree: full rebuild ----
+      // Rebuild from all rows, restore cached state, render; keepStatus keeps the status line.
+      function loadRecords(records, keepStatus = false) {
+        try {
+          if (!records.length || !Object.keys(records[0]).some(h => h.toLowerCase() === 'siteurl')) return;
+          roots = buildTree(records);
+          rebuildStorageMetricNodeIndex();
+          for (const root of roots) {
+            setStorageBreakdown(root);
+            applyCachedStorageMetrics(root);
+            applyCachedFolderChildState(root);
+          }
+          if (!roots.length) throw new Error(t('err.noLibraries'));
+          loaded = true;
+          searchEl.disabled = false;
+          $('searchButton').disabled = false;
+          sortEl.disabled = false;
+          for (const button of sortHeads) button.disabled = false;
+          $('collapseButton').disabled = false;
+          $('trimQueueButton').disabled = !serviceOnline || trimQueueState.loading;
+          updateStats();
+          render();
+          if (!keepStatus) $('status').textContent = '';
+        } catch (err) {
+          $('status').textContent = err.message || t('err.display');
+        }
+      }
+
+      // ---- Start-up ----
+      // Wire remaining controls, apply language and theme, then contact the service.
+      refreshReportButton.addEventListener('click', loadLatestReport);
+      // Search: Enter runs it; Esc or clearing the box goes back to the tree; a filter change re-runs it.
+      searchEl.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); void runSearch(); }
+        else if (event.key === 'Escape' && searchState.active) { event.preventDefault(); closeSearch(); }
+      });
+      searchEl.addEventListener('input', () => { if (!searchEl.value && searchState.active) closeSearch(); });
+      for (const select of Object.values(searchFilters)) select.addEventListener('change', () => { if (searchState.active) void runSearch(); });
+      $('searchBack').addEventListener('click', closeSearch);
+      // Search button: same as Enter; with an empty box it just puts the cursor in the box.
+      $('searchButton').addEventListener('click', () => {
+        if (!searchEl.value.trim() && !searchState.active) searchEl.focus();
+        else void runSearch();
+      });
+      sortEl.addEventListener('change', render);
+      for (const button of sortHeads) button.addEventListener('click', () => setSort(button.dataset.sortKey));
+      // Collapse all: close every row; the toggle handler updates the state.
+      $('collapseButton').addEventListener('click', () => treeEl.querySelectorAll('details').forEach(d => d.open = false));
+      $('trimQueueButton').addEventListener('click', () => void checkTrimQueue());
+      $('trimQueueStat').addEventListener('click', () => setTrimPanelOpen($('trimPanel').hidden));
+      setTrimPanelOpen(readSetting('spnav-trims-open') === '1');
+      applyStaticText();
+      setTheme(readSetting('spnav-theme') || 'system');
+      setBadge('badge.connecting');
+      setScanState('scan.connecting', { key: 'scan.intro' });
+      checkLocalService();
+    })();
+  </script>
+</body>
+</html>

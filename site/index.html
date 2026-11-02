@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SharePoint Navigator — See where your SharePoint storage goes</title>
+  <meta name="description" content="A free app for Microsoft 365 admins, for macOS and Windows. Browse every site's Documents library as one tree, see how much is version history, search all sites at once, and tidy up. Runs on your own computer.">
+  <meta property="og:title" content="SharePoint Navigator">
+  <meta property="og:description" content="See where your SharePoint storage goes.">
+  <meta property="og:image" content="shots/tree.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Text in two languages: each element carries its English text, and site.js swaps in Korean
+       from its table when the visitor's language is Korean or they choose it. Light and dark
+       follow the visitor's system, screenshots included (<picture> sources). -->
+  <header class="top">
+    <a class="brand" href="#">
+      <img src="icon.svg" alt="" width="36" height="36">
+      <span>SharePoint Navigator</span>
+    </a>
+    <nav>
+      <a href="#features" data-t="nav.features">Features</a>
+      <a href="#setup" data-t="nav.setup">Setup</a>
+      <a href="#download" data-t="nav.download">Download</a>
+      <a href="https://github.com/yusungchang/sharepoint-navigator">GitHub</a>
+      <button id="lang" class="lang" type="button" aria-label="Language">한국어</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="hero-icon" src="icon.svg" alt="" width="112" height="112">
+      <h1 data-t="hero.title">See where your<br>SharePoint storage goes.</h1>
+      <p class="lead" data-t="hero.lead">Every site’s Documents library in one tree, with how much is current files and how much is version history. Find any file across all sites, then tidy up. A small app on your own computer.</p>
+      <div class="cta">
+        <a id="primary" class="button primary" href="#download"><span id="primary-label" data-t="hero.download">Download</span></a>
+        <a class="button" href="#setup" data-t="hero.setup">Admin setup</a>
+      </div>
+      <p id="version" class="version" hidden></p>
+      <div class="badges">
+        <a class="badge" href="#privacy">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2.5 19h19"/></svg>
+          <span><b data-t="b1.label">Runs on your computer</b><small data-t="b1.sub">Talks only to Microsoft</small></span>
+        </a>
+        <a class="badge" href="#features">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v15M5 9h5M5 17h5"/><rect x="12" y="6.5" width="8" height="5" rx="1.5"/><rect x="12" y="14.5" width="5" height="5" rx="1.5"/></svg>
+          <span><b data-t="b2.label">Every site at once</b><small data-t="b2.sub">One tree, one scale</small></span>
+        </a>
+        <a class="badge" href="#features">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4v4h4"/><path d="M12 8v4l3 2"/></svg>
+          <span><b data-t="b3.label">Version history shown</b><small data-t="b3.sub">The space you can win back</small></span>
+        </a>
+        <a class="badge" href="#search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+          <span><b data-t="b4.label">Search all sites</b><small data-t="b4.sub">Then jump to the folder</small></span>
+        </a>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h8M8 3v2M5.5 5c.5 3 3 6 6 7.5M10.5 5c-.6 3-3 6-6.5 7.5"/><path d="M13 20l4-9 4 9M14.5 17h5"/></svg>
+          <span><b data-t="b5.label">English and 한국어</b><small data-t="b5.sub">Light and dark</small></span>
+        </div>
+        <a class="badge" href="https://github.com/yusungchang/sharepoint-navigator">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10.5" width="16" height="9.5" rx="1"/><rect x="3" y="7.5" width="18" height="3" rx="1"/><path d="M12 7.5V20"/><path d="M12 7.5C10.8 4.6 7.5 4.3 7.5 6.1C7.5 7.4 10 7.5 12 7.5C14 7.5 16.5 7.4 16.5 6.1C16.5 4.3 13.2 4.6 12 7.5z"/></svg>
+          <span><b data-t="b6.label">Free and open source</b><small data-t="b6.sub">MIT licence</small></span>
+        </a>
+      </div>
+      <figure class="shot hero-shot">
+        <picture>
+          <source id="shot-tree-dark" srcset="shots/tree-dark.png" media="(prefers-color-scheme: dark)">
+          <img id="shot-tree" src="shots/tree.png" alt="SharePoint Navigator with one library opened: each folder's storage split into current files and version history" width="2560" height="1800">
+        </picture>
+      </figure>
+    </section>
+
+    <section id="features" class="features">
+      <h2 data-t="features.title">Know your storage, then tidy it</h2>
+      <div class="grid">
+        <article>
+          <h3 data-t="f1.title">Every site, one tree</h3>
+          <p data-t="f1.text">Each site’s Documents library is one row. Open it to see its folders, 200 at a time, even in libraries with tens of thousands of items.</p>
+        </article>
+        <article>
+          <h3 data-t="f2.title">Current files vs. version history</h3>
+          <p data-t="f2.text">Every bar splits storage into the files as they are now and the old versions SharePoint keeps. One scale for all rows, so big folders stand out.</p>
+        </article>
+        <article>
+          <h3 data-t="f3.title">Search every site at once</h3>
+          <p data-t="f3.text">Filter by site, type, size and date. Sort by size to find the biggest files in the whole organisation.</p>
+        </article>
+        <article>
+          <h3 data-t="f4.title">Rename, copy and move</h3>
+          <p data-t="f4.text">With a preview first, and a check that nobody changed the item meanwhile. Copies never overwrite.</p>
+        </article>
+        <article>
+          <h3 data-t="f5.title">Trim old versions</h3>
+          <p data-t="f5.text">The same three rules SharePoint offers, with the site’s last trim, a typed confirmation and a stop button.</p>
+        </article>
+        <article>
+          <h3 data-t="f6.title">Nothing to install on servers</h3>
+          <p data-t="f6.text">No PowerShell, no scripts, no agents. One app, one Microsoft sign-in, and it stops when you close its tab.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="search" class="showcase">
+      <figure class="shot">
+        <picture>
+          <source id="shot-search-dark" srcset="shots/search-dark.png" media="(prefers-color-scheme: dark)">
+          <img id="shot-search" src="shots/search.png" alt="Search results across all sites, files over 100 MB sorted by size" width="2560" height="1640">
+        </picture>
+      </figure>
+      <div>
+        <h2 data-t="search.title">Find it, then see where it lives</h2>
+        <p data-t="search.text">One search through every site. <b>Show in tree</b> opens each folder down to the result and highlights it, so renaming, moving or checking its folder’s size is one click away.</p>
+      </div>
+    </section>
+
+    <section id="privacy" class="security">
+      <h2 data-t="sec.title">Careful by design</h2>
+      <p class="sub" data-t="sec.sub">It works with your organisation’s files, so it is built to be boring in the right ways.</p>
+      <ul class="checks">
+        <li data-t="sec.c1">Runs on your computer and talks only to Microsoft. No server of ours, no telemetry, no account.</li>
+        <li data-t="sec.c2">Sees only what the signed-in person may open. The sign-in is kept in the system’s protected storage (Keychain or Windows).</li>
+        <li data-t="sec.c3">Changes re-check the item first and refuse to overwrite. Copy and Move stay in the item’s own library.</li>
+        <li data-t="sec.c4">A version trim is compared with what SharePoint recorded right after it starts, and stopped at once if it differs.</li>
+        <li data-t="sec.c5">Opening a folder reads only that folder. Nothing scans the whole tenant behind your back.</li>
+      </ul>
+    </section>
+
+    <section id="setup" class="setup">
+      <h2 data-t="setup.title">Set up once per organisation</h2>
+      <p class="sub" data-t="setup.sub">Your Microsoft 365 admin registers a small Entra app. It takes about five minutes and needs no secret.</p>
+      <ol class="setup-steps">
+        <li data-t="setup.s1">In the Entra admin center, go to <b>App registrations → New registration</b>. Single tenant, no redirect URI.</li>
+        <li data-t="setup.s2">Under <b>Authentication</b>, turn on <b>Allow public client flows</b>.</li>
+        <li data-t="setup.s3">Add delegated permissions: Microsoft Graph <code>Sites.Read.All</code>, <code>Sites.ReadWrite.All</code>; SharePoint <code>AllSites.Read</code>, and <code>AllSites.FullControl</code> for trims. Grant admin consent.</li>
+        <li data-t="setup.s4">Give people the <b>Application (client) ID</b>. The app asks for it once, with your tenant name.</li>
+      </ol>
+      <p class="setup-note" data-t="setup.note">Tip: put a file named <code>contoso_clientid.txt</code> with the ID next to the app, and staff are never asked. The full site list and trims need the SharePoint Administrator role.</p>
+      <p class="all"><a href="https://github.com/yusungchang/sharepoint-navigator#set-up-the-entra-app-once-per-organisation" data-t="setup.more">Step-by-step guide</a></p>
+    </section>
+
+    <section id="download" class="download">
+      <h2 data-t="download.title">Download</h2>
+      <p class="sub" data-t="download.sub">Free for macOS and Windows. Needs Microsoft 365 with SharePoint Online.</p>
+      <div class="platforms">
+        <article id="mac">
+          <h3>macOS</h3>
+          <a class="button primary dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-macOS-AppleSilicon.zip" data-t="dl.mac">Apple silicon (M1 and later)</a>
+          <p class="note" data-t="dl.macNote">Intel Macs: run from source (see GitHub).</p>
+          <div class="steps" data-os="mac">
+            <h4 data-t="first.title">First launch</h4>
+            <ol>
+              <li data-t="first.mac1">Unzip, then double-click <b>sharepoint-navigator</b>.</li>
+              <li data-t="first.mac2">When macOS says it can’t verify the app, click <b>Done</b>, then System Settings → Privacy &amp; Security → <b>Open Anyway</b>. Only the first time.</li>
+              <li data-t="first.both">A terminal window shows a sign-in code and your browser opens. Keep the window open while you use the app.</li>
+            </ol>
+          </div>
+        </article>
+        <article id="windows">
+          <h3>Windows</h3>
+          <a class="button primary dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-Windows.zip" data-t="dl.win">Windows 10 and 11 (.zip)</a>
+          <p class="note" data-t="dl.winNote">64-bit. No installer: unzip and run.</p>
+          <div class="steps" data-os="windows">
+            <h4 data-t="first.title">First launch</h4>
+            <ol>
+              <li data-t="first.win1">Right-click the zip → <b>Extract All</b>, then double-click <b>sharepoint-navigator.exe</b>.</li>
+              <li data-t="first.win2">If “Windows protected your PC” appears, click <b>More info</b>, then <b>Run anyway</b>.</li>
+              <li data-t="first.both">A terminal window shows a sign-in code and your browser opens. Keep the window open while you use the app.</li>
+            </ol>
+          </div>
+        </article>
+        <article id="source">
+          <h3 data-t="dl.sourceTitle">From source</h3>
+          <a class="button" href="https://github.com/yusungchang/sharepoint-navigator#run-from-source" data-t="dl.source">Python 3.11 or later</a>
+          <p class="note" data-t="dl.sourceNote">Any Mac (Intel too), Windows or Linux with a browser.</p>
+          <div class="steps">
+            <h4 data-t="first.title">First launch</h4>
+            <ol>
+              <li data-t="first.src1">macOS: double-click <code>sharepoint-navigator.command</code>.</li>
+              <li data-t="first.src2">Elsewhere: <code>pip install -r requirements.txt</code>, then <code>python sharepoint-navigator.py</code>.</li>
+            </ol>
+          </div>
+        </article>
+      </div>
+      <p class="all"><a href="https://github.com/yusungchang/sharepoint-navigator/releases" data-t="download.all">All versions and release notes</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <p><span data-t="footer.text">Your files stay between you and Microsoft.</span> · <a href="https://github.com/yusungchang/sharepoint-navigator" data-t="footer.source">Source on GitHub</a> · <a href="https://github.com/yusungchang/sharepoint-navigator/issues/new" data-t="footer.bug">Report a bug</a></p>
+    <p class="author"><span data-t="footer.author">Made by</span> <a href="https://www.linkedin.com/in/yusungchang/" rel="author">yusungchang</a> · © 2026</p>
+    <p class="fine" data-t="footer.tm">SharePoint, Microsoft 365 and Entra are trademarks of Microsoft. This project isn’t affiliated with Microsoft.</p>
+  </footer>
+
+  <!-- Shown after a download link is clicked: the download starts, and this says what comes next. -->
+  <dialog id="after" class="after">
+    <h3 data-t="after.title">Your download has started</h3>
+    <p class="sub-left" data-t="after.text">The app isn’t signed with a paid certificate yet, so the first time you open it:</p>
+    <div id="after-steps"></div>
+    <form method="dialog"><button class="button primary" data-t="after.close">Got it</button></form>
+  </dialog>
+
+  <script src="site.js"></script>
+</body>
+</html>
