@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 0.6.1 | 2026-11-02 | Fix: Download did nothing. Graph left out the download address because the request used `$select`; it now uses `select`. Failed downloads are logged with their reason. 57 offline tests. |
 | 0.6.0 | 2026-11-02 | No terminal window: setup and Microsoft sign-in happen in the browser page. Windowless apps with the app icon: `SharePoint Navigator.app` (macOS, background app) and `SharePoint Navigator.exe` (Windows). Change organisation from the page. Download button for files in the tree and in search results. 57 offline tests. |
 | 0.5.0 | 2026-11-02 | Public on GitHub (MIT) with a product page. First run asks for the tenant and client ID and saves them in the user's folder (`--setup` to change); a client ID file beside the app still wins. GitHub builds macOS and Windows apps on each release. Demo mode with a made-up company for screenshots. 52 offline tests. |
 | 0.4.0 | 2026-11-02 | New: search across all libraries. Enter in the search box searches every site through SharePoint's search index, with site, type, size and date filters and sorting. A Search button sits beside the box. Each result offers Show in tree (folder-with-magnifier icon; opens the folders down to it and highlights it) and Open. The box no longer filters only the loaded rows. 46 offline tests (14 new). |
@@ -28,6 +29,21 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 0.6.1, 2 November 2026
+
+**Fix: Download did nothing.** Reported right after the 0.6.0 release (macOS, Chrome): the button's spinner
+appeared and vanished, and nothing downloaded. The app log showed `HTTP 400: POST /api/download-link` without a
+reason. Asked directly, the running app said "SharePoint didn't return a download address for this file".
+A read-only probe against the real tenant showed why: with `?$select=id,name,@microsoft.graph.downloadUrl` Graph
+returns the item **without** the download address; with `?select=…` (no `$`), or with no select at all, it is
+there. The offline fake didn't model that, so the tests passed.
+- *Fix:* the request uses `select=`. A test now checks that the query starts with `select=`, so it can't
+  quietly go back.
+- *Logging:* a failed download link is printed with its reason ("Download link failed: …"), so app.log says why.
+- *Checked live (read-only):* the fixed version on a spare port got a link for a 26 MB PDF; a HEAD request
+  showed `200`, `application/pdf` and `Content-Disposition: attachment`, so the browser saves it without leaving
+  the page. Offline tests 57/57.
 
 ## 0.6.0, 2 November 2026
 

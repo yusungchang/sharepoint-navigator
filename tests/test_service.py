@@ -726,6 +726,9 @@ class DownloadTests(ServiceTest):
         self.assertTrue(result["url"].startswith(f"https://{HOST}/"))
         self.assertEqual(result["name"], "Report.docx")
         self.assertEqual(TENANT.graph_patches(), [])          # read-only
+        # "$select" makes real Graph drop the downloadUrl annotation; "select" keeps it.
+        query = [c["query"] for c in TENANT.graph_calls if "downloadUrl" in c["query"]][0]
+        self.assertTrue(query.startswith("select="), query)
 
     def test_folder_is_refused(self):
         self.refused("/api/download-link", {"siteUrl": ALPHA, "itemPath": f"{DOCS}/Folder A"}, "Only files")

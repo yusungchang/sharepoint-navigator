@@ -70,7 +70,7 @@ from msal_extensions import PersistedTokenCache, build_encrypted_persistence
 
 # App version, "vibe" scheme x.y.z: each working session raises z; a meaningful change raises y
 # and resets z. The only place it is set; every change is recorded in docs/HISTORY.md.
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 # User files (client ID) live in APP_ROOT; bundled files (the HTML page) in RESOURCE_ROOT.
 FROZEN = bool(getattr(sys, "frozen", False))
@@ -1820,8 +1820,10 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
                     drive, item = inventory.get_item_by_path(site_url, item_path)
                     if item.get("file") is None:
                         raise NavigatorError("Only files can be downloaded.")
+                    # "select", not "$select": with "$select" Graph silently drops the downloadUrl
+                    # annotation (checked against a real tenant in 0.6.1).
                     found = graph.get(f"/drives/{quote(drive['id'], safe='')}/items/{quote(item['id'], safe='')}"
-                                      "?$select=id,name,@microsoft.graph.downloadUrl")
+                                      "?select=id,name,@microsoft.graph.downloadUrl")
                     url = str(found.get("@microsoft.graph.downloadUrl") or "")
                     # Only ever hand the browser a SharePoint https address.
                     host = (urlsplit(url).hostname or "").lower()
@@ -2092,6 +2094,9 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
                     what = "Storage Metrics" if self.path == "/api/storage-metric" else "Folder listing"
                     print(f"{what} failed for {details.get('siteUrl', '(unknown site)')} / "
                           f"{details.get('folderPath', '(unknown folder)')}: {exc}", flush=True)
+                elif self.path == "/api/download-link":
+                    # The request line alone doesn't say why; the reason is short and has no token.
+                    print(f"Download link failed: {exc}", flush=True)
                 self.send_json(400, {"ok": False, "error": str(exc)})
 
     # ---- Start serving ----
