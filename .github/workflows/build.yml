@@ -31,15 +31,15 @@ jobs:
         run: python -m pip install -r requirements-build.txt
       - name: Offline tests
         run: python -m unittest tests/test_service.py
-      - name: Build (includes the executable's self-check)
+      - name: Build (includes the app's self-check)
         run: python build_app.py
-      # zip keeps the macOS executable's "run" permission, which a bare download would lose.
+      # ditto keeps the .app's internal links and ad hoc signature, which plain zip can break.
       - name: Zip (macOS)
         if: runner.os == 'macOS'
-        run: cd dist && zip -9 "../${{ matrix.zip }}" sharepoint-navigator
+        run: ditto -c -k --keepParent "dist/SharePoint Navigator.app" "${{ matrix.zip }}"
       - name: Zip (Windows)
         if: runner.os == 'Windows'
-        run: Compress-Archive -Path dist\sharepoint-navigator.exe -DestinationPath "${{ matrix.zip }}"
+        run: Compress-Archive -Path "dist\SharePoint Navigator.exe" -DestinationPath "${{ matrix.zip }}"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.zip }}

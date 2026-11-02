@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>SharePoint Navigator</title>
   <!-- Inline tab icon, so the browser does not request /favicon.ico. -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M7 10.5h7l2 2.5h9v9.5H7z' fill='white'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22%3E%3Cdefs%3E%3ClinearGradient id=%22bg%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%233b82f6%22/%3E%3Cstop offset=%221%22 stop-color=%22%231e40af%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22128%22 height=%22128%22 rx=%2228%22 fill=%22url%28%23bg%29%22/%3E%3Cg fill=%22none%22 stroke=%22%23dbeafe%22 stroke-width=%225%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 opacity=%22.9%22%3E%3Cpath d=%22M30 34v54M30 58h12M30 88h12%22/%3E%3C/g%3E%3Crect x=%2222%22 y=%2226%22 width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%23fde68a%22/%3E%3Crect x=%2250%22 y=%2229%22 width=%2256%22 height=%2210%22 rx=%225%22 fill=%22%23ffffff%22 opacity=%22.95%22/%3E%3Crect x=%2250%22 y=%2253%22 width=%2230%22 height=%2210%22 rx=%225%22 fill=%22%2393c5fd%22/%3E%3Crect x=%2278%22 y=%2253%22 width=%2220%22 height=%2210%22 rx=%225%22 fill=%22%23fbbf24%22/%3E%3Crect x=%2250%22 y=%2283%22 width=%2218%22 height=%2210%22 rx=%225%22 fill=%22%2393c5fd%22/%3E%3Crect x=%2266%22 y=%2283%22 width=%2210%22 height=%2210%22 rx=%225%22 fill=%22%23fbbf24%22/%3E%3C/svg%3E">
   <script>
     // Apply a saved Light/Dark theme before first paint (no flash). "System"
     // leaves html[data-theme] unset; try guards against missing localStorage.
@@ -356,6 +356,34 @@
       0%, 35% { background: rgba(79, 141, 245, .22); box-shadow: inset 0 0 0 1px rgba(79, 141, 245, .6); }
       100% { background: transparent; box-shadow: none; }
     }
+    /* ==== Setup and sign-in (renderConnect): shown instead of everything below the header ==== */
+    body.connecting main > section:not(#connectPanel), body.connecting #status { display: none; }
+    .connect-panel { max-width: 600px; margin: 8px auto 24px; padding: 28px 30px; }
+    .connect-panel h2 { margin: 0 0 6px; font-size: 21px; }
+    .connect-panel p { margin: 0 0 14px; color: var(--muted); line-height: 1.55; }
+    .connect-panel a { color: var(--accent); }
+    /* A link drawn as a button ("Open sign-in page") keeps the button's look. */
+    .connect-panel a.button { display: inline-flex; color: white; text-decoration: none; }
+    .connect-form { display: grid; gap: 14px; margin-top: 18px; }
+    .connect-field { display: grid; gap: 5px; font-size: 13px; font-weight: 650; }
+    .connect-field input { border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; color: var(--text); background: var(--surface-2); font: inherit; font-size: 15px; font-weight: 500; }
+    .connect-field input:focus { outline: none; border-color: #83aef7; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+    .connect-field small { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .connect-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+    .connect-actions .link-button { margin-left: auto; }
+    .connect-error { color: var(--danger); font-size: 13px; overflow-wrap: anywhere; }
+    .connect-error:empty { display: none; }
+    /* The sign-in code: large, spaced, easy to read aloud or type. */
+    .connect-code { display: flex; align-items: center; gap: 12px; margin: 6px 0 18px; }
+    .connect-code code { padding: 10px 18px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-2); font: 700 30px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .12em; }
+    .connect-wait { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+    .connect-wait::before { content: ''; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: connect-spin .9s linear infinite; }
+    @keyframes connect-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .connect-wait::before { animation: none; } }
+    /* Small text buttons: "Change organisation", "Copy". */
+    .link-button { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .link-button:hover { text-decoration: underline; }
+    .eyebrow .link-button { margin-left: 10px; font-size: 11px; letter-spacing: 0; text-transform: none; }
     /* Empty-tree message (still loading, or no search matches). */
     .empty { padding: 54px 22px; text-align: center; color: var(--muted); }
     .empty-icon { font-size: 32px; margin-bottom: 9px; }
@@ -425,7 +453,7 @@
     <!-- Header: title, switches, service badge, Stop app -->
     <header class="hero">
       <div>
-        <div class="eyebrow" id="tenantLabel">SharePoint Online</div>
+        <div class="eyebrow"><span id="tenantLabel">SharePoint Online</span><button class="link-button" id="changeOrgButton" type="button" hidden data-i18n="connect.change">Change organisation</button></div>
         <h1>SharePoint Navigator<span class="app-version" id="appVersion" hidden>__APP_VERSION__</span></h1>
       </div>
       <div class="service-actions">
@@ -465,6 +493,9 @@
         </div>
       </div>
     </section>
+
+    <!-- Setup and sign-in (renderConnect): shown until the app is signed in to SharePoint -->
+    <section class="panel connect-panel" id="connectPanel" hidden aria-live="polite"></section>
 
     <!-- Status line -->
     <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -747,7 +778,7 @@
           'badge.title': 'The app runs only on this computer.', 'badge.connecting': 'Connecting…', 'badge.connected': '✓ Connected to SharePoint',
           'badge.notConnected': '⚠ Not connected', 'badge.openFromApp': '⚠ Not connected · open this page from the app',
           'badge.notRunning': '⚠ App not running', 'badge.stopped': 'Stopped',
-          'badge.stopFailed': "Couldn't stop the app. Press Ctrl+C in its Terminal window.", 'badge.renamed': '✓ Renamed in SharePoint · {name}',
+          'badge.stopFailed': "Couldn't stop the app. Close this tab; it stops by itself shortly.", 'badge.renamed': '✓ Renamed in SharePoint · {name}',
           'button.stop': 'Stop app', 'button.reload': 'Reload libraries', 'button.collapse': 'Collapse all',
           'scan.aria': 'Library loading progress', 'scan.trackAria': 'Sites read',
           'scan.connecting': 'Connecting to SharePoint…', 'scan.intro': 'Libraries load first. Open one to see its folders and sizes.',
@@ -755,8 +786,8 @@
           'scan.reading': 'Reading {site}', 'scan.openHint': 'Open a library or folder to see its contents and sizes.', 'scan.connectingShort': 'Connecting…',
           'scan.counter': '{done} of {total} sites · {libs} libraries', 'scan.counterOne': '{done} of {total} sites · 1 library',
           'scan.skippedOne': 'Skipped 1 site: {items}', 'scan.skippedMany': 'Skipped {n} sites: {items}',
-          'scan.stoppedTitle': 'App stopped', 'scan.stoppedMsg': 'Run sharepoint-navigator.command to start it again.',
-          'scan.notRunningTitle': "The app isn't running", 'scan.notRunningMsg': 'Start it with sharepoint-navigator.command, then reload this page.',
+          'scan.stoppedTitle': 'App stopped', 'scan.stoppedMsg': 'Open SharePoint Navigator again to start it.',
+          'scan.notRunningTitle': "The app isn't running", 'scan.notRunningMsg': 'Open SharePoint Navigator, then reload this page.',
           'reason.noAccess': 'no access', 'reason.notFound': 'not found', 'reason.error': 'error', 'site.home': 'Home site',
           'stats.aria': 'Storage summary', 'stats.used': 'Storage used',
           'stats.history': 'Version history', 'stats.measured': '{m} of {n} measured', 'stats.historyShare': '{pct} of storage used',
@@ -836,7 +867,21 @@
           'trims.done': 'Finished', 'trims.failed': 'Failed', 'trims.stopped': 'Stopped',
           'trims.result': '{when} · {deleted} versions deleted · {freed} freed',
           'notice.title': 'About these numbers', 'size.tip': 'Current files: {current} · Version history: {history}',
-          'search.button': 'Search', 'search.back': '← Back to libraries', 'search.scope': 'Where', 'search.allSites': 'All sites',
+          'search.button': 'Search', 'search.back': '← Back to libraries',
+          'badge.signIn': 'Sign-in needed', 'connect.change': 'Change organisation',
+          'confirm.changeOrg': 'Switch to another organisation? You will sign in again; nothing in SharePoint changes.',
+          'connect.setupTitle': 'Connect to your Microsoft 365',
+          'connect.setupText': 'Two things your Microsoft 365 admin can tell you. They are saved on this computer, so you are asked only once.',
+          'connect.tenant': 'Tenant name', 'connect.tenantHint': 'The name in your SharePoint address: contoso for https://contoso.sharepoint.com. A full address works too.',
+          'connect.clientId': 'Application (client) ID', 'connect.clientHint': "From your organisation's Entra app for SharePoint Navigator.",
+          'connect.clientKnown': 'Already saved. Leave empty to keep it.', 'connect.guide': 'Admin setup guide',
+          'connect.continue': 'Continue', 'connect.working': 'Connecting…',
+          'connect.connecting': 'Connecting to Microsoft…', 'connect.finding': 'Signed in. Finding your SharePoint sites…',
+          'connect.codeTitle': 'Sign in to Microsoft', 'connect.codeText': 'Open the Microsoft sign-in page, enter this code, and sign in with your work account.',
+          'connect.copy': 'Copy', 'connect.copied': 'Copied', 'connect.open': 'Open sign-in page',
+          'connect.waiting': 'Waiting for you to finish signing in… The code works for {min} more minutes.',
+          'connect.other': 'Use a different organisation', 'connect.errorTitle': "Couldn't connect",
+          'connect.retry': 'Try again', 'search.scope': 'Where', 'search.allSites': 'All sites',
           'search.type': 'Type', 'search.typeAll': 'Everything', 'search.typeFolders': 'Folders', 'search.typeFiles': 'Files',
           'search.typeOffice': 'Word, Excel, PowerPoint', 'search.typePdf': 'PDF', 'search.typeImages': 'Images',
           'search.typeVideo': 'Video and audio', 'search.typeArchives': 'Zip and archives',
@@ -857,7 +902,7 @@
           'badge.title': '이 앱은 이 컴퓨터에서만 실행됩니다.', 'badge.connecting': '연결 중…', 'badge.connected': '✓ SharePoint에 연결됨',
           'badge.notConnected': '⚠ 연결되지 않음', 'badge.openFromApp': '⚠ 연결되지 않음 · 앱에서 이 페이지를 여세요',
           'badge.notRunning': '⚠ 앱이 실행 중이 아님', 'badge.stopped': '중지됨',
-          'badge.stopFailed': '앱을 중지하지 못했습니다. 터미널 창에서 Ctrl+C를 누르세요.', 'badge.renamed': '✓ SharePoint에서 이름을 바꿨습니다 · {name}',
+          'badge.stopFailed': '앱을 중지하지 못했습니다. 이 탭을 닫으면 잠시 뒤 저절로 멈춥니다.', 'badge.renamed': '✓ SharePoint에서 이름을 바꿨습니다 · {name}',
           'button.stop': '앱 중지', 'button.reload': '라이브러리 다시 불러오기', 'button.collapse': '모두 접기',
           'scan.aria': '라이브러리 불러오기 진행 상황', 'scan.trackAria': '읽은 사이트',
           'scan.connecting': 'SharePoint에 연결하는 중…', 'scan.intro': '라이브러리를 먼저 불러옵니다. 라이브러리를 열면 폴더와 크기를 볼 수 있습니다.',
@@ -865,8 +910,8 @@
           'scan.reading': '{site} 읽는 중', 'scan.openHint': '라이브러리나 폴더를 열면 내용과 크기를 볼 수 있습니다.', 'scan.connectingShort': '연결 중…',
           'scan.counter': '사이트 {total}개 중 {done}개 · 라이브러리 {libs}개', 'scan.counterOne': '사이트 {total}개 중 {done}개 · 라이브러리 1개',
           'scan.skippedOne': '사이트 1개를 건너뛰었습니다: {items}', 'scan.skippedMany': '사이트 {n}개를 건너뛰었습니다: {items}',
-          'scan.stoppedTitle': '앱이 중지되었습니다', 'scan.stoppedMsg': '다시 시작하려면 sharepoint-navigator.command를 실행하세요.',
-          'scan.notRunningTitle': '앱이 실행 중이 아닙니다', 'scan.notRunningMsg': 'sharepoint-navigator.command로 앱을 시작한 다음 이 페이지를 새로 고치세요.',
+          'scan.stoppedTitle': '앱이 중지되었습니다', 'scan.stoppedMsg': '다시 시작하려면 SharePoint Navigator를 다시 여세요.',
+          'scan.notRunningTitle': '앱이 실행 중이 아닙니다', 'scan.notRunningMsg': 'SharePoint Navigator를 연 다음 이 페이지를 새로 고치세요.',
           'reason.noAccess': '접근 권한 없음', 'reason.notFound': '찾을 수 없음', 'reason.error': '오류', 'site.home': '홈 사이트',
           'stats.aria': '저장 공간 요약', 'stats.used': '사용된 스토리지',
           'stats.history': '버전 기록', 'stats.measured': '{n}개 중 {m}개 측정됨', 'stats.historyShare': '사용된 스토리지의 {pct}',
@@ -946,7 +991,21 @@
           'trims.done': '완료', 'trims.failed': '실패', 'trims.stopped': '중지됨',
           'trims.result': '{when} · 버전 {deleted}개 삭제 · {freed} 확보',
           'notice.title': '이 숫자에 대해', 'size.tip': '현재 파일: {current} · 버전 기록: {history}',
-          'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기', 'search.scope': '위치', 'search.allSites': '모든 사이트',
+          'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기',
+          'badge.signIn': '로그인 필요', 'connect.change': '조직 바꾸기',
+          'confirm.changeOrg': '다른 조직으로 바꿀까요? 다시 로그인하게 되며, SharePoint의 내용은 바뀌지 않습니다.',
+          'connect.setupTitle': 'Microsoft 365에 연결',
+          'connect.setupText': 'Microsoft 365 관리자에게 받을 수 있는 두 가지입니다. 이 컴퓨터에 저장되므로 한 번만 묻습니다.',
+          'connect.tenant': '테넌트 이름', 'connect.tenantHint': 'SharePoint 주소에 있는 이름입니다. https://contoso.sharepoint.com이면 contoso. 전체 주소를 넣어도 됩니다.',
+          'connect.clientId': '애플리케이션(클라이언트) ID', 'connect.clientHint': '조직에서 SharePoint Navigator용으로 등록한 Entra 앱의 ID입니다.',
+          'connect.clientKnown': '이미 저장되어 있습니다. 그대로 두려면 비워 두세요.', 'connect.guide': '관리자 설정 안내',
+          'connect.continue': '계속', 'connect.working': '연결 중…',
+          'connect.connecting': 'Microsoft에 연결하는 중…', 'connect.finding': '로그인했습니다. SharePoint 사이트를 찾는 중…',
+          'connect.codeTitle': 'Microsoft에 로그인', 'connect.codeText': 'Microsoft 로그인 페이지를 열고 이 코드를 입력한 다음, 회사 계정으로 로그인하세요.',
+          'connect.copy': '복사', 'connect.copied': '복사됨', 'connect.open': '로그인 페이지 열기',
+          'connect.waiting': '로그인을 마치기를 기다리는 중… 코드는 {min}분 더 쓸 수 있습니다.',
+          'connect.other': '다른 조직 사용', 'connect.errorTitle': '연결하지 못했습니다',
+          'connect.retry': '다시 시도', 'search.scope': '위치', 'search.allSites': '모든 사이트',
           'search.type': '종류', 'search.typeAll': '전체', 'search.typeFolders': '폴더', 'search.typeFiles': '파일',
           'search.typeOffice': 'Word, Excel, PowerPoint', 'search.typePdf': 'PDF', 'search.typeImages': '이미지',
           'search.typeVideo': '동영상·오디오', 'search.typeArchives': '압축 파일',
@@ -1010,6 +1069,7 @@
         if (loaded) render();
         if (trimState) renderTrimDialog();
         if (searchState.active) { fillSearchScope(); renderSearch(); }
+        if (connectState) { const status = connectState.status; connectState = null; renderConnect(status); }
       }
       // ---- Theme ----
       // 'light'/'dark' set html[data-theme]; 'system' removes it so the media query decides.
@@ -2590,8 +2650,12 @@
               if (response.ok) return;
             } catch {}
             // The service is gone. React only once; onerror can fire repeatedly.
-            if (!serviceOnline) return;
+            if (!serviceReachable) return;
             serviceOnline = false;
+            serviceReachable = false;
+            window.clearTimeout(connectPollTimer);
+            document.body.classList.remove('connecting');
+            connectPanel.hidden = true;
             stopServiceButton.classList.add('hidden');
             setBadge('badge.stopped');
             setScanState('scan.stoppedTitle', { key: 'scan.stoppedMsg' });
@@ -2602,24 +2666,175 @@
       }
       // ---- Loading panel & service status (continued) ----
       // Start-up check: needs http on localhost and a real token; then stream and scan.
+      // ---- Setup and sign-in ----
+      // Until the app is signed in, /api/status says which stage it is at ("setup", "connecting",
+      // "code" or "error") and the page shows connectPanel instead of everything else. During
+      // "connecting" and "code" it polls once a second; the setup form isn't redrawn while typed in.
+      const connectPanel = $('connectPanel');
+      let connectState = null;
+      let connectPollTimer = 0;
+      // The app answers (even before sign-in): Stop app and the session stream work.
+      let serviceReachable = false;
+      async function fetchStatus() {
+        const response = await fetch('/api/status', { headers: { 'X-Local-Token': serviceToken } });
+        const status = await response.json();
+        if (!response.ok) throw new Error(status.error || 'status');
+        return status;
+      }
+      async function postConnect(path, body = {}) {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+          body: JSON.stringify(body)
+        });
+        const value = await response.json();
+        if (!response.ok || !value.ok) throw new Error(value.error || t('connect.errorTitle'));
+        return value;
+      }
+      // Draw the panel for a stage. Redraws only when what it shows changes.
+      function renderConnect(status) {
+        const key = [status.phase, status.step, status.code, status.error, lang].join('|');
+        const minutes = Math.max(1, Math.ceil((status.expiresIn || 0) / 60));
+        if (connectState && connectState.key === key) {
+          const wait = connectPanel.querySelector('[data-wait]');
+          if (wait) wait.textContent = t('connect.waiting', { min: minutes });
+          return;
+        }
+        connectState = { key, status };
+        document.body.classList.add('connecting');
+        connectPanel.hidden = false;
+        connectPanel.replaceChildren();
+        setBadge(status.phase === 'setup' ? 'badge.signIn' : 'badge.connecting');
+        if (status.phase === 'setup') {
+          connectPanel.append(el('h2', '', t('connect.setupTitle')), el('p', '', t('connect.setupText')));
+          const form = el('form', 'connect-form');
+          const field = (label, hint, input) => {
+            const wrap = el('label', 'connect-field', label);
+            wrap.append(input, el('small', '', hint));
+            return wrap;
+          };
+          const tenantInput = el('input');
+          Object.assign(tenantInput, { name: 'tenant', required: true, placeholder: 'contoso', value: status.suggestedTenant || '', autocomplete: 'off', spellcheck: false });
+          const clientInput = el('input');
+          Object.assign(clientInput, { name: 'clientId', required: !status.clientIdKnown, autocomplete: 'off', spellcheck: false,
+            placeholder: status.clientIdKnown ? t('connect.clientKnown') : '00000000-0000-0000-0000-000000000000' });
+          const error = el('div', 'connect-error');
+          const submit = el('button', 'button primary', t('connect.continue'));
+          submit.type = 'submit';
+          const guide = el('a', 'link-button', t('connect.guide'));
+          Object.assign(guide, { href: 'https://github.com/yusungchang/sharepoint-navigator#set-up-the-entra-app-once-per-organisation', target: '_blank', rel: 'noopener noreferrer' });
+          const actions = el('div', 'connect-actions');
+          actions.append(submit, guide);
+          form.append(field(t('connect.tenant'), t('connect.tenantHint'), tenantInput),
+            field(t('connect.clientId'), t('connect.clientHint'), clientInput), error, actions);
+          form.addEventListener('submit', async event => {
+            event.preventDefault();
+            submit.disabled = true;
+            submit.textContent = t('connect.working');
+            error.textContent = '';
+            try {
+              const next = await postConnect('/api/setup', { tenant: tenantInput.value, clientId: clientInput.value.trim() });
+              onConnectStatus(next);
+            } catch (err) {
+              error.textContent = err.message;
+              submit.disabled = false;
+              submit.textContent = t('connect.continue');
+            }
+          });
+          connectPanel.append(form);
+          tenantInput.focus();
+        } else if (status.phase === 'code') {
+          connectPanel.append(el('h2', '', t('connect.codeTitle')), el('p', '', t('connect.codeText')));
+          const codeRow = el('div', 'connect-code');
+          const copy = el('button', 'link-button', t('connect.copy'));
+          copy.type = 'button';
+          copy.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(status.code); copy.textContent = t('connect.copied'); } catch {}
+          });
+          codeRow.append(el('code', '', status.code), copy);
+          const open = el('a', 'button primary', t('connect.open'));
+          Object.assign(open, { href: status.verificationUri, target: '_blank', rel: 'noopener noreferrer' });
+          const other = el('button', 'link-button', t('connect.other'));
+          other.type = 'button';
+          other.addEventListener('click', async () => onConnectStatus(await postConnect('/api/setup-reset')));
+          const actions = el('div', 'connect-actions');
+          actions.append(open, other);
+          const wait = el('div', 'connect-wait', t('connect.waiting', { min: minutes }));
+          wait.dataset.wait = '1';
+          connectPanel.append(codeRow, actions, el('p', '', ''), wait);
+        } else if (status.phase === 'error') {
+          connectPanel.append(el('h2', '', t('connect.errorTitle')), el('p', 'connect-error', status.error));
+          const retry = el('button', 'button primary', t('connect.retry'));
+          retry.type = 'button';
+          retry.addEventListener('click', async () => onConnectStatus(await postConnect('/api/connect-retry')));
+          const other = el('button', 'link-button', t('connect.change'));
+          other.type = 'button';
+          other.addEventListener('click', async () => onConnectStatus(await postConnect('/api/setup-reset')));
+          const actions = el('div', 'connect-actions');
+          actions.append(retry, other);
+          connectPanel.append(actions);
+        } else {
+          connectPanel.append(el('div', 'connect-wait', t(status.step === 'sites' ? 'connect.finding' : 'connect.connecting')));
+        }
+      }
+      // Act on a status: show the right panel and keep polling, or carry on into the app once ready.
+      function onConnectStatus(status) {
+        window.clearTimeout(connectPollTimer);
+        if (status.phase === 'ready') {
+          connectState = null;
+          connectPanel.hidden = true;
+          connectPanel.replaceChildren();
+          document.body.classList.remove('connecting');
+          void startApp(status);
+          return;
+        }
+        renderConnect(status);
+        if (status.phase === 'connecting' || status.phase === 'code') {
+          connectPollTimer = window.setTimeout(async () => {
+            try { onConnectStatus(await fetchStatus()); } catch { connectPollTimer = window.setTimeout(() => void checkLocalService(), 2000); }
+          }, 1000);
+        }
+      }
+      // "Change organisation" in the header: back to the setup screen.
+      $('changeOrgButton').addEventListener('click', async () => {
+        if (!window.confirm(t('confirm.changeOrg'))) return;
+        try {
+          await postConnect('/api/setup-reset');
+          location.reload();
+        } catch (err) { $('status').textContent = err.message; }
+      });
       async function checkLocalService() {
         if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname) || serviceToken.startsWith('__')) {
           setBadge('badge.openFromApp');
           return;
         }
         try {
-          const response = await fetch('/api/status', { headers: { 'X-Local-Token': serviceToken } });
-          const status = await response.json();
-          serviceOnline = response.ok && status.connected === true;
+          const status = await fetchStatus();
+          serviceReachable = true;
+          stopServiceButton.classList.remove('hidden');
+          // Hold the session stream from the start, so closing the tab during setup stops the app too.
+          startSessionStream();
+          onConnectStatus(status);
+        } catch {
+          serviceOnline = false;
+          serviceReachable = false;
+          stopServiceButton.classList.add('hidden');
+          setBadge('badge.notRunning');
+          setScanState('scan.notRunningTitle', { key: 'scan.notRunningMsg' });
+        }
+      }
+      // Signed in: the normal page, as before.
+      async function startApp(status) {
+        try {
+          serviceOnline = status.connected === true;
           setBadge(serviceOnline ? 'badge.connected' : 'badge.notConnected');
           if (status.tenantId) {
             $('tenantLabel').textContent = `${status.tenantId}.sharepoint.com`;
             $('headTenant').textContent = `${status.tenantId}.sharepoint.com`;
           }
           knownSiteCount = Number(status.siteCount || 0);
-          stopServiceButton.classList.toggle('hidden', !serviceOnline);
+          $('changeOrgButton').hidden = !serviceOnline;
           refreshReportButton.disabled = !serviceOnline;
-          if (serviceOnline) startSessionStream();
           if (serviceOnline && !loaded) {
             updateScanDisplay({ status: 'scanning', running: true, totalSites: status.siteCount, completedSites: 0 });
             await loadLatestReport();
@@ -2634,12 +2849,16 @@
       }
       // Stop app: ask the service to shut down, then show the stopped state.
       stopServiceButton.addEventListener('click', async () => {
-        if (!serviceOnline || !window.confirm(t('confirm.stop'))) return;
+        if (!serviceReachable || !window.confirm(t('confirm.stop'))) return;
         stopServiceButton.disabled = true;
         try {
           await fetch('/api/stop', { method: 'POST', headers: { 'X-Local-Token': serviceToken } });
           if (sessionStream) sessionStream.close();
           serviceOnline = false;
+          serviceReachable = false;
+          window.clearTimeout(connectPollTimer);
+          document.body.classList.remove('connecting');
+          connectPanel.hidden = true;
           setBadge('badge.stopped');
           stopServiceButton.classList.add('hidden');
           setScanState('scan.stoppedTitle', { key: 'scan.stoppedMsg' });

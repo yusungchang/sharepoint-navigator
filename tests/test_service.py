@@ -47,8 +47,6 @@ def load_app():
 
 
 nav = load_app()
-# ServiceTest swaps read_client_id for a fake; SettingsTests needs the real one.
-real_read_client_id = nav.read_client_id
 
 
 # ---- Fake tenant: one site with two libraries, a few folders and files ----
@@ -306,10 +304,13 @@ class FakeSharePoint(nav.SharePointRestClient):
 
 
 class FakeAuth:
-    """Stands in for the MSAL sign-in; the fakes never look at tokens."""
+    """Stands in for the MSAL sign-in (already signed in); the fakes never look at tokens."""
 
     def __init__(self, *args):
         pass
+
+    def signed_in(self):
+        return True
 
     def token(self):
         return "fake-token"
@@ -329,11 +330,10 @@ class ServiceTest(unittest.TestCase):
         nav.AuthSession = FakeAuth
         nav.GraphClient = FakeGraph
         nav.SharePointRestClient = FakeSharePoint
-        nav.read_client_id = lambda tenant, ask_again=False: "00000000-0000-0000-0000-000000000000"
         nav.discover_sites = lambda tenant, sharepoint, graph: (
             [{"url": ALPHA, "title": "Alpha"}, {"url": SUBSITE, "title": "Alpha Sub"}], "test site list")
         nav.webbrowser = types.SimpleNamespace(open=lambda url: None)
-        nav.time = types.SimpleNamespace(sleep=lambda seconds: None)
+        nav.time = types.SimpleNamespace(sleep=lambda seconds: None, time=time.time)
         os.environ["SHAREPOINT_NAVIGATOR_AUTO_STOP"] = "0"
         # The service prints to the terminal; keep that in a buffer the tests can read.
         cls.log = io.StringIO()
@@ -342,7 +342,8 @@ class ServiceTest(unittest.TestCase):
             probe.bind(("127.0.0.1", 0))
             cls.port = probe.getsockname()[1]
         cls.base = f"http://127.0.0.1:{cls.port}"
-        cls.thread = threading.Thread(target=nav.run_server, args=("contoso", cls.port), daemon=True)
+        cls.thread = threading.Thread(target=nav.run_server, daemon=True,
+                                      args=(cls.port, "contoso", "00000000-0000-0000-0000-000000000000"))
         cls.thread.start()
         for _ in range(100):
             try:
@@ -354,6 +355,11 @@ class ServiceTest(unittest.TestCase):
             sys.stdout = cls.real_stdout
             raise RuntimeError("The service did not start:\n" + cls.log.getvalue())
         cls.token = re.search(r"serviceToken = '([^']+)'", page).group(1)
+        # Sign-in and site discovery run in the background; wait until the routes are ready.
+        for _ in range(100):
+            if cls.call("/api/status")[1].get("phase") == "ready":
+                break
+            time.sleep(0.05)
 
     @classmethod
     def tearDownClass(cls):
@@ -708,61 +714,149 @@ class SearchTests(ServiceTest):
 
 # ---- Tenant and client ID settings (no service needed) ----
 
-class SettingsTests(unittest.TestCase):
-    """choose_tenant and read_client_id against a temporary app folder and settings file."""
+class TempSettings:
+    """Mixin: a temporary app folder and settings file for one test."""
 
     GUID = "11111111-2222-3333-4444-555555555555"
 
-    def setUp(self):
+    def use_temp_settings(self):
         import tempfile
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
         (root / "app").mkdir()
-        self.saved = (nav.APP_ROOT, nav.USER_FOLDER, nav.SETTINGS_FILE)
+        self.saved_paths = (nav.APP_ROOT, nav.USER_FOLDER, nav.SETTINGS_FILE)
         nav.APP_ROOT, nav.USER_FOLDER = root / "app", root / "user"
         nav.SETTINGS_FILE = nav.USER_FOLDER / "settings.json"
-        self.answers: list[str] = []
-        nav.input = lambda prompt="": self.answers.pop(0)    # main module looks up input() here first
-        # Keep the questions' explanations out of the test output.
-        self.real_stdout, sys.stdout = sys.stdout, io.StringIO()
 
-    def tearDown(self):
-        sys.stdout = self.real_stdout
-        nav.APP_ROOT, nav.USER_FOLDER, nav.SETTINGS_FILE = self.saved
-        del nav.input
+    def restore_settings(self):
+        nav.APP_ROOT, nav.USER_FOLDER, nav.SETTINGS_FILE = self.saved_paths
         self.temp.cleanup()
 
-    def test_first_run_asks_then_remembers(self):
-        self.answers = ["https://Contoso.sharepoint.com/sites/x", self.GUID]
-        self.assertEqual(nav.choose_tenant([]), "contoso")
-        self.assertEqual(real_read_client_id("contoso"), self.GUID)
-        # Second run: nothing is asked (an empty answer list would raise IndexError).
-        self.assertEqual(nav.choose_tenant([]), "contoso")
-        self.assertEqual(real_read_client_id("contoso"), self.GUID)
 
-    def test_file_beside_the_app_wins_and_is_never_asked(self):
+class SettingsTests(TempSettings, unittest.TestCase):
+    """known_tenant and known_client_id: nothing is asked here; unknowns go to the setup screen."""
+
+    def setUp(self):
+        self.use_temp_settings()
+
+    def tearDown(self):
+        self.restore_settings()
+
+    def test_nothing_known_at_first(self):
+        self.assertIsNone(nav.known_tenant([]))
+        self.assertIsNone(nav.known_client_id("contoso"))
+
+    def test_saved_settings_are_remembered(self):
+        nav.save_settings("contoso", self.GUID)
+        self.assertEqual(nav.known_tenant([]), "contoso")
+        self.assertEqual(nav.known_client_id("contoso"), self.GUID)
+
+    def test_file_beside_the_app_wins(self):
         (nav.APP_ROOT / "fabrikam_clientid.txt").write_text(self.GUID + "\n", encoding="utf-8")
-        self.assertEqual(nav.choose_tenant([]), "fabrikam")
-        self.assertEqual(real_read_client_id("fabrikam"), self.GUID)
-        self.assertFalse(nav.SETTINGS_FILE.exists())
+        nav.save_settings("contoso", "99999999-8888-7777-6666-555555555555")
+        self.assertEqual(nav.known_tenant([]), "fabrikam")
+        self.assertEqual(nav.known_client_id("fabrikam"), self.GUID)
 
     def test_command_line_tenant_is_used(self):
-        self.assertEqual(nav.choose_tenant(["contoso-admin.sharepoint.com"]), "contoso")
-
-    def test_bad_client_id_is_asked_again(self):
-        self.answers = ["not-a-guid", self.GUID]
-        self.assertEqual(real_read_client_id("contoso"), self.GUID)
-
-    def test_setup_asks_again(self):
-        nav.save_settings("contoso", self.GUID)
-        other = "99999999-8888-7777-6666-555555555555"
-        self.answers = ["", other]   # Enter keeps the suggested tenant
-        self.assertEqual(nav.choose_tenant(["--setup"], ask_again=True), "contoso")
-        self.assertEqual(real_read_client_id("contoso", ask_again=True), other)
+        self.assertEqual(nav.known_tenant(["contoso-admin.sharepoint.com"]), "contoso")
 
     def test_invalid_tenant_is_refused(self):
         with self.assertRaises(nav.NavigatorError):
             nav.tenant_from_input("contoso evil")
+
+
+# ---- Setup screen and device-code sign-in ----
+
+class DeviceCodeAuth(FakeAuth):
+    """Not signed in yet: hands out a device code and waits until the test 'enters' it."""
+
+    entered = threading.Event()
+
+    def signed_in(self):
+        return False
+
+    def begin_device_flow(self):
+        return {"user_code": "ABCD-1234", "verification_uri": "https://microsoft.com/devicelogin", "expires_in": 900}
+
+    def complete_device_flow(self, flow, exit_condition=None):
+        while not DeviceCodeAuth.entered.wait(0.02):
+            if exit_condition and exit_condition(flow):
+                raise nav.NavigatorError("Sign-in stopped.")
+
+
+class ConnectTests(TempSettings, unittest.TestCase):
+    """A server started with nothing known: setup screen, device code, then ready."""
+
+    def setUp(self):
+        self.use_temp_settings()
+        self.saved_auth = nav.AuthSession
+        nav.AuthSession = DeviceCodeAuth
+        DeviceCodeAuth.entered.clear()
+        nav.GraphClient, nav.SharePointRestClient = FakeGraph, FakeSharePoint
+        nav.discover_sites = lambda tenant, sharepoint, graph: ([{"url": ALPHA, "title": "Alpha"}], "test site list")
+        nav.webbrowser = types.SimpleNamespace(open=lambda url: None)
+        os.environ["SHAREPOINT_NAVIGATOR_AUTO_STOP"] = "0"
+        self.real_stdout, sys.stdout = sys.stdout, io.StringIO()
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            self.port = probe.getsockname()[1]
+        self.base = f"http://127.0.0.1:{self.port}"
+        self.thread = threading.Thread(target=nav.run_server, args=(self.port,), daemon=True)
+        self.thread.start()
+        for _ in range(100):
+            try:
+                page = urllib.request.urlopen(self.base + "/").read().decode("utf-8")
+                break
+            except OSError:
+                time.sleep(0.05)
+        self.token = re.search(r"serviceToken = '([^']+)'", page).group(1)
+
+    def tearDown(self):
+        self.call("/api/stop", {})
+        self.thread.join(timeout=5)
+        sys.stdout = self.real_stdout
+        nav.AuthSession = self.saved_auth
+        self.restore_settings()
+
+    def call(self, path, body=None):
+        return ServiceTest.call.__func__(self, path, body)
+
+    def wait_for(self, phase):
+        for _ in range(200):
+            status = self.call("/api/status")[1]
+            if status["phase"] == phase:
+                return status
+            time.sleep(0.02)
+        self.fail(f"never reached {phase}: {status}")
+
+    def test_setup_then_code_then_ready(self):
+        self.assertEqual(self.call("/api/status")[1]["phase"], "setup")
+        status, result = self.call("/api/scan", {})
+        self.assertEqual(status, 409)                      # nothing works before sign-in
+        self.call("/api/setup", {"tenant": "https://Contoso.sharepoint.com", "clientId": self.GUID})
+        code = self.wait_for("code")
+        self.assertEqual(code["code"], "ABCD-1234")
+        self.assertGreater(code["expiresIn"], 0)
+        DeviceCodeAuth.entered.set()
+        ready = self.wait_for("ready")
+        self.assertEqual((ready["tenantId"], ready["siteCount"]), ("contoso", 1))
+        self.assertEqual(nav.known_client_id("contoso"), self.GUID)   # saved for next time
+        self.assertEqual(self.call("/api/scan", {})[0], 202)
+
+    def test_bad_client_id_is_refused(self):
+        status, result = self.call("/api/setup", {"tenant": "contoso", "clientId": "not-a-guid"})
+        self.assertEqual(status, 400)
+        self.assertIn("client) ID", result["error"])
+        self.assertEqual(self.call("/api/status")[1]["phase"], "setup")
+
+    def test_change_organisation_stops_the_waiting_sign_in(self):
+        self.call("/api/setup", {"tenant": "contoso", "clientId": self.GUID})
+        self.wait_for("code")
+        self.call("/api/setup-reset", {})
+        self.assertEqual(self.call("/api/status")[1]["phase"], "setup")
+        DeviceCodeAuth.entered.set()                       # the old sign-in finishing changes nothing
+        time.sleep(0.2)
+        self.assertEqual(self.call("/api/status")[1]["phase"], "setup")
 
 
 if __name__ == "__main__":

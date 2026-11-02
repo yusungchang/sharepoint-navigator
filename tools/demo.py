@@ -5,7 +5,9 @@ Nothing signs in and nothing reaches Microsoft: sign-in, site discovery, Graph a
 are replaced by an in-memory tenant built from a fixed random seed, so every run looks the same.
 All page code and all of the service's own logic (paths, paging, sizes, search parsing) are real.
 
-    python tools/demo.py [port]        # default port 8790; opens nothing, Ctrl+C to stop
+    python tools/demo.py [port] [--setup | --signin]
+        default port 8790; opens nothing, Ctrl+C to stop. --setup starts at the setup screen;
+        --signin shows the sign-in code screen (with a made-up code) and stays there.
 
 For screenshots, tools/shots.py starts this and drives the page. The page gets two small extras,
 only in the demo: a URL fragment (#lang=ko&theme=dark&shot=tree) chooses language, theme and what
@@ -299,16 +301,35 @@ class DemoSharePoint(nav.SharePointRestClient):
 
 
 class DemoAuth:
-    """Stands in for the MSAL sign-in."""
+    """Stands in for the MSAL sign-in (already signed in)."""
 
     def __init__(self, *args):
         pass
+
+    def signed_in(self):
+        return True
 
     def token(self):
         return "demo"
 
     def token_for(self, scopes, force_refresh=False):
         return "demo"
+
+
+class DemoSignInAuth(DemoAuth):
+    """For --signin: not signed in yet; shows a made-up code and waits until the demo stops."""
+
+    def signed_in(self):
+        return False
+
+    def begin_device_flow(self):
+        return {"user_code": "DXQF-7KLM", "verification_uri": "https://microsoft.com/devicelogin", "expires_in": 900}
+
+    def complete_device_flow(self, flow, exit_condition=None):
+        import time
+        while not (exit_condition and exit_condition(flow)):
+            time.sleep(0.2)
+        raise nav.NavigatorError("Demo sign-in stopped.")
 
 
 # Added to the page, demo only: language/theme from the URL fragment, no session stream, and
@@ -361,12 +382,11 @@ END_SCRIPT = """<script>
 </script>"""
 
 
-def install(page_dir: Path):
+def install(page_dir: Path, signin: bool = False):
     """Swap the outside world for the demo and point the service at a page copy with the extras."""
-    nav.AuthSession = DemoAuth
+    nav.AuthSession = DemoSignInAuth if signin else DemoAuth
     nav.GraphClient = DemoGraph
     nav.SharePointRestClient = DemoSharePoint
-    nav.read_client_id = lambda tenant, ask_again=False: "00000000-0000-0000-0000-000000000000"
     nav.discover_sites = lambda tenant, sharepoint, graph: (
         [{"url": s["webUrl"], "title": s["displayName"]} for s in TENANT.sites.values()], "demo site list")
     html = (ROOT / nav.PAGE_FILE).read_text(encoding="utf-8")
@@ -376,12 +396,16 @@ def install(page_dir: Path):
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8790
+    numbers = [a for a in sys.argv[1:] if a.isdigit()]
+    port = int(numbers[0]) if numbers else 8790
     os.environ["SHAREPOINT_NAVIGATOR_AUTO_STOP"] = "0"
-    os.environ["BROWSER"] = "true"   # don't open a browser; tools/shots.py or you do that
     with tempfile.TemporaryDirectory() as page_dir:
-        install(Path(page_dir))
-        nav.run_server("contoso", port)
+        install(Path(page_dir), signin="--signin" in sys.argv)
+        # The demo never writes the real settings file.
+        nav.save_settings = lambda tenant, client_id=None: None
+        nav.load_settings = lambda: {"tenant": "contoso"}
+        nav.run_server(port, "contoso", "00000000-0000-0000-0000-000000000000",
+                       force_setup="--setup" in sys.argv, open_browser=False)
 
 
 if __name__ == "__main__":

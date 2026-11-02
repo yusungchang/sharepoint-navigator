@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 0.6.0 | 2026-11-02 | No terminal window: setup and Microsoft sign-in happen in the browser page. Windowless apps with the app icon: `SharePoint Navigator.app` (macOS, background app) and `SharePoint Navigator.exe` (Windows). Change organisation from the page. 54 offline tests. |
 | 0.5.0 | 2026-11-02 | Public on GitHub (MIT) with a product page. First run asks for the tenant and client ID and saves them in the user's folder (`--setup` to change); a client ID file beside the app still wins. GitHub builds macOS and Windows apps on each release. Demo mode with a made-up company for screenshots. 52 offline tests. |
 | 0.4.0 | 2026-11-02 | New: search across all libraries. Enter in the search box searches every site through SharePoint's search index, with site, type, size and date filters and sorting. A Search button sits beside the box. Each result offers Show in tree (folder-with-magnifier icon; opens the folders down to it and highlights it) and Open. The box no longer filters only the loaded rows. 46 offline tests (14 new). |
 | 0.3.2 | 2026-11-01 | Bar parts renamed to "Current files" and "Version history"; rows show both numbers with a coloured square and no words, since the legend at the top names the colours. Trim icon is now a trash can with a clock. Site lines drop the repeated tenant address, which now sits once beside the "Library / folder" header. Sort by clicking column headers; the colour legend sits in the bar column's header. Bars and folder/file icons inside an opened library are visible again in light theme. Rename's name check is one shared method; Move explains a name clash in plain words. Offline tests for the service (32 checks, faked Graph and SharePoint). Files renamed to kebab-case: `sharepoint-navigator.py`, `.command`, `.html`. PowerShell scripts tidied (names and help text only). |
@@ -27,6 +28,41 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 0.6.0, 2 November 2026
+
+**No terminal window.** The owner's main complaint after 0.5.0: the console had to stay open the whole time.
+It was needed for three things, and all three moved into the browser page:
+- *Setup:* a **Connect to your Microsoft 365** screen asks for the tenant name and client ID (with a link to
+  the admin guide) and saves them, instead of terminal questions. A client ID file beside the app still skips it.
+- *Sign-in:* the page shows the device code with **Copy** and **Open sign-in page**, and a spinner until
+  Microsoft confirms. Before, the code was printed in the terminal.
+- *Staying alive and stopping:* already handled by the tab (auto-stop) and **Stop app**.
+
+How it works: the server now starts first and signs in on a background thread (`connect()`); `/api/status`
+reports the stage (setup, connecting, code, ready, error) and every SharePoint route answers 409 until ready.
+A generation counter makes a waiting sign-in stop when the person chooses **Change organisation** (new, at the
+top of the page) and ignores it if it finishes anyway. `AuthSession` no longer blocks on a prompt; a sign-in that
+expires mid-session says to reopen the app. Opening the app again while it runs just reopens the page (it checks
+its own Server header on the port). Without a terminal, messages go to `~/.sharepoint-navigator/app.log`
+(started over above 1 MB), and a start-up error shows a system dialog (Windows message box, macOS alert).
+
+**Apps with an icon.** The build is now windowless: `SharePoint Navigator.exe` on Windows (one file, icon in
+Explorer and the taskbar) and `SharePoint Navigator.app` on macOS (a normal folder bundle, since PyInstaller
+discourages one-file .app; a background app with no Dock window, because the browser tab is its window; the
+bundle is re-signed ad hoc after its Info.plist is edited, which Apple silicon requires). The icon is the
+product page's SVG, turned into `assets/icon.icns` (with Apple's margin) and `assets/icon.ico` by
+`tools/make_icons.py`; the app's tab icon is the same design. On macOS a client ID file is looked for next to the
+.app, not inside it. The release zips keep their names; inside are the new apps (`ditto` zips the .app).
+
+**Pages and docs:** first-launch, install and uninstall steps no longer mention a terminal, and use the new names.
+Switching organisation is "Change organisation" instead of `--setup` (which still works from source).
+
+**Checks.** Offline tests 54/54 (new: setup → code → ready with settings saved, a bad client ID refused,
+Change organisation stopping a waiting sign-in; settings helpers rewritten). Built the Mac app here: background
+app flag, version and icon in the bundle, signature valid, self-check passes, a second launch reopens the page,
+output in app.log. The demo has `--setup` and `--signin` modes, used to check both new screens in English/Korean
+and light/dark. The Windows app is built by GitHub; it still needs a try on a real PC.
 
 ## 0.5.0, 2 November 2026
 

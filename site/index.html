@@ -154,9 +154,9 @@
           <div class="steps" data-os="mac">
             <h4 data-t="first.title">First launch</h4>
             <ol>
-              <li data-t="first.mac1">Unzip, then double-click <b>sharepoint-navigator</b>.</li>
+              <li data-t="first.mac1">Unzip, then double-click <b>SharePoint Navigator</b>.</li>
               <li data-t="first.mac2">When macOS says it can’t verify the app, click <b>Done</b>, then System Settings → Privacy &amp; Security → <b>Open Anyway</b>. Only the first time.</li>
-              <li data-t="first.both">A terminal window shows a sign-in code and your browser opens. Keep the window open while you use the app.</li>
+              <li data-t="first.both">It opens in your browser: enter your organisation’s details once, then sign in with the code it shows. Closing the tab stops the app.</li>
             </ol>
           </div>
         </article>
@@ -167,9 +167,9 @@
           <div class="steps" data-os="windows">
             <h4 data-t="first.title">First launch</h4>
             <ol>
-              <li data-t="first.win1">Right-click the zip → <b>Extract All</b>, then double-click <b>sharepoint-navigator.exe</b>.</li>
+              <li data-t="first.win1">Right-click the zip → <b>Extract All</b>, then double-click <b>SharePoint Navigator.exe</b>.</li>
               <li data-t="first.win2">If “Windows protected your PC” appears, click <b>More info</b>, then <b>Run anyway</b>.</li>
-              <li data-t="first.both">A terminal window shows a sign-in code and your browser opens. Keep the window open while you use the app.</li>
+              <li data-t="first.both">It opens in your browser: enter your organisation’s details once, then sign in with the code it shows. Closing the tab stops the app.</li>
             </ol>
           </div>
         </article>
@@ -192,19 +192,19 @@
     <!-- Install, update, uninstall: there is no installer, so these are plain file steps. -->
     <section id="install" class="install">
       <h2 data-t="inst.title">Install, update and uninstall</h2>
-      <p class="sub" data-t="inst.sub">No installer and nothing in the system: the app is one file, plus a small settings folder in your user folder.</p>
+      <p class="sub" data-t="inst.sub">No installer and no window of its own: the app lives in your browser. It’s one app file, plus a small settings folder in your user folder.</p>
       <div class="platforms">
         <article>
           <h3>macOS</h3>
           <div class="steps">
             <h4 data-t="inst.install">Install</h4>
             <ol>
-              <li data-t="inst.mac1">Unzip the download and move <b>sharepoint-navigator</b> to Applications (or any folder).</li>
+              <li data-t="inst.mac1">Unzip the download and move <b>SharePoint Navigator</b> to Applications (or any folder).</li>
               <li data-t="inst.mac2">Optional: drag it to the Dock to start it with one click.</li>
             </ol>
             <h4 data-t="inst.uninstall">Uninstall</h4>
             <ol>
-              <li data-t="inst.mac3">Move <b>sharepoint-navigator</b> to the Trash.</li>
+              <li data-t="inst.mac3">Move <b>SharePoint Navigator</b> to the Trash.</li>
               <li data-t="inst.mac4">In Finder, Go → Go to Folder, type <code>~/.sharepoint-navigator</code> and move that folder to the Trash (saved tenant, client ID and sign-in).</li>
               <li data-t="inst.mac5">In Keychain Access, search for <b>msal-extensions</b> and delete that entry (the encrypted sign-in key).</li>
             </ol>
@@ -216,11 +216,11 @@
             <h4 data-t="inst.install">Install</h4>
             <ol>
               <li data-t="inst.win1">Right-click the zip → <b>Extract All</b>, into a folder that stays, such as Documents\SharePoint Navigator.</li>
-              <li data-t="inst.win2">Optional: right-click <b>sharepoint-navigator.exe</b> → <b>Show more options</b> → <b>Send to</b> → <b>Desktop (create shortcut)</b>.</li>
+              <li data-t="inst.win2">Optional: right-click <b>SharePoint Navigator.exe</b> → <b>Show more options</b> → <b>Send to</b> → <b>Desktop (create shortcut)</b>.</li>
             </ol>
             <h4 data-t="inst.uninstall">Uninstall</h4>
             <ol>
-              <li data-t="inst.win3">Delete the folder with <b>sharepoint-navigator.exe</b> (and the shortcut, if you made one).</li>
+              <li data-t="inst.win3">Delete the folder with <b>SharePoint Navigator.exe</b> (and the shortcut, if you made one).</li>
               <li data-t="inst.win4">Type <code>%USERPROFILE%\.sharepoint-navigator</code> in File Explorer's address bar and delete that folder (saved tenant, client ID and sign-in).</li>
             </ol>
           </div>
@@ -229,10 +229,10 @@
           <h3 data-t="inst.updateTitle">Updating</h3>
           <div class="steps">
             <ol>
-              <li data-t="inst.up1">Download the new version and replace the old file with it.</li>
+              <li data-t="inst.up1">Download the new version and replace the old app with it.</li>
               <li data-t="inst.up2">Your tenant, client ID and sign-in are kept, so it starts straight away.</li>
               <li data-t="inst.up3">The first launch of each new version shows the security step once more (Open Anyway on macOS, Run anyway on Windows).</li>
-              <li data-t="inst.up4">To switch organisation, start it from a terminal with <code>--setup</code>, or delete the settings folder.</li>
+              <li data-t="inst.up4">To switch organisation, click <b>Change organisation</b> at the top of the app.</li>
             </ol>
           </div>
         </article>

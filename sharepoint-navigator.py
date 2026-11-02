@@ -68,11 +68,25 @@ from msal_extensions import PersistedTokenCache, build_encrypted_persistence
 
 # App version, "vibe" scheme x.y.z: each working session raises z; a meaningful change raises y
 # and resets z. The only place it is set; every change is recorded in docs/HISTORY.md.
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 # User files (client ID) live in APP_ROOT; bundled files (the HTML page) in RESOURCE_ROOT.
 FROZEN = bool(getattr(sys, "frozen", False))
-APP_ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
+def _app_root() -> Path:
+    """The folder the app sits in, where an admin may put <tenant>_clientid.txt.
+
+    For a macOS .app the executable is inside "Name.app/Contents/MacOS", so the folder holding
+    the .app is three levels up.
+    """
+    if not FROZEN:
+        return Path(__file__).resolve().parent
+    exe = Path(sys.executable).resolve()
+    if exe.parent.name == "MacOS" and exe.parents[2].suffix == ".app":
+        return exe.parents[3]
+    return exe.parent
+
+
+APP_ROOT = _app_root()
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
 PAGE_FILE = "sharepoint-navigator.html"
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
@@ -130,10 +144,11 @@ def graph_path(value: str) -> str:
 # ---- Sign-in ----
 
 class AuthSession:
-    """One MSAL sign-in shared by both clients; the constructor may block on the device-code prompt."""
+    """One MSAL sign-in shared by both clients. Nothing here waits on a terminal: the service runs
+    the device-code steps in the background and the page shows the code (see run_server's connect)."""
 
     def __init__(self, tenant: str, client_id: str):
-        """Open the encrypted token cache, create the MSAL client, and sign in."""
+        """Open the encrypted token cache and create the MSAL client; doesn't sign in yet."""
         self.tenant = tenant
         self.client_id = client_id
         USER_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -151,41 +166,45 @@ class AuthSession:
         self.client = msal.PublicClientApplication(
             client_id=client_id, authority=authority, token_cache=self.cache
         )
-        self.result = self._acquire_token()
 
-    def _acquire_token(self) -> dict:
-        """Return an MSAL Graph token result, silently from the cache or else via device-code sign-in."""
+    def _silent(self, scopes: list[str], force_refresh: bool = False) -> dict | None:
+        """A token result from the cache (refreshing it if needed), or None if a new sign-in is needed."""
+        result = None
         for account in self.client.get_accounts():
-            result = self.client.acquire_token_silent(SCOPES, account=account)
+            result = self.client.acquire_token_silent(scopes, account=account, force_refresh=force_refresh)
             if result and result.get("access_token"):
                 return result
+        return result if result and result.get("access_token") else None
+
+    def signed_in(self) -> bool:
+        """True if an earlier sign-in can be reused without asking the person again."""
+        return self._silent(SCOPES) is not None
+
+    def begin_device_flow(self) -> dict:
+        """Start a device-code sign-in; the result holds user_code, verification_uri and expires_in."""
         flow = self.client.initiate_device_flow(scopes=SCOPES)
         if "user_code" not in flow:
+            detail = flow.get("error_description") or flow.get("error") or json.dumps(flow)
             raise NavigatorError(
-                "Could not start Microsoft sign-in. Check that the Entra app allows public client flows. "
-                + json.dumps(flow)
+                "Could not start the Microsoft sign-in. Check the tenant name and client ID, and that the "
+                f"Entra app allows public client flows. Details: {str(detail)[:400]}"
             )
-        print("\nMicrosoft Graph sign-in is needed. Complete this one-time sign-in in your browser:")
-        print(flow.get("message", "Open the verification URL and enter the displayed code."))
-        # Best effort; the printed message is enough on its own.
-        try:
-            webbrowser.open(flow.get("verification_uri", "https://microsoft.com/devicelogin"))
-        except Exception:
-            pass
-        result = self.client.acquire_token_by_device_flow(flow)
+        return flow
+
+    def complete_device_flow(self, flow: dict, exit_condition=None) -> None:
+        """Wait until the person has entered the code (or it expires, or exit_condition() says stop)."""
+        result = self.client.acquire_token_by_device_flow(
+            flow, exit_condition=exit_condition or (lambda flow: False))
         if not result or not result.get("access_token"):
             detail = (result or {}).get("error_description") or (result or {}).get("error") or "Sign-in failed."
-            raise NavigatorError(str(detail))
-        return result
+            raise NavigatorError(str(detail).split("\r\n", 1)[0][:400])
 
     def token(self) -> str:
-        """Return a current Graph access token, falling back to a blocking device-code sign-in."""
-        accounts = self.client.get_accounts()
-        if accounts:
-            result = self.client.acquire_token_silent(SCOPES, account=accounts[0])
-            if result and result.get("access_token"):
-                return result["access_token"]
-        return self._acquire_token()["access_token"]
+        """Return a current Graph access token from the cache; never prompts."""
+        result = self._silent(SCOPES)
+        if result:
+            return result["access_token"]
+        raise NavigatorError("The Microsoft sign-in has expired. Close SharePoint Navigator and open it again to sign in.")
 
     def token_for(self, scopes: list[str], force_refresh: bool = False) -> str:
         """Get a SharePoint token silently from the Graph sign-in's refresh token.
@@ -1100,10 +1119,11 @@ class Inventory:
 # ---- Tenant and client ID settings ----
 # Where they come from, first match wins:
 #   tenant:    command line, SHAREPOINT_NAVIGATOR_TENANT, the only <tenant>_clientid.txt beside the
-#              app, the tenant saved last time, else a question (then saved).
+#              app, the tenant saved last time.
 #   client ID: <tenant>_clientid.txt beside the app (an admin can ship it with the app, so staff are
-#              never asked), the ID saved for that tenant, else a question (then saved).
-# --setup asks both questions again.
+#              never asked), else the ID saved for that tenant.
+# Anything missing is asked on the page's setup screen (/api/setup), which saves it. --setup, or
+# "Change organisation" on the page, shows that screen again.
 
 GUID_PATTERN = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
@@ -1156,50 +1176,29 @@ def client_id_from_file(tenant: str) -> str | None:
     return client_id
 
 
-def read_client_id(tenant: str, ask_again: bool = False) -> str:
-    """Return the tenant's client ID from the file beside the app, the saved settings, or a question.
-
-    An answer to the question is saved, so it is asked only once per tenant (or again with --setup).
-    """
+def known_client_id(tenant: str) -> str | None:
+    """The tenant's client ID from the file beside the app or the saved settings, or None."""
     from_file = client_id_from_file(tenant)
     if from_file:
         return from_file
     saved = (load_settings().get("clientIds") or {}).get(tenant)
-    if saved and re.fullmatch(GUID_PATTERN, str(saved)) and not ask_again:
-        return str(saved)
-    print(f"\nSharePoint Navigator needs the Application (client) ID of your organisation's Entra app")
-    print("for it. Your Microsoft 365 admin sets that up once and can give you the ID.")
-    print(f"Setup guide: {SETUP_GUIDE_URL}")
-    for _ in range(3):
-        answer = input("Application (client) ID: ").strip()
-        if re.fullmatch(GUID_PATTERN, answer):
-            save_settings(tenant, answer)
-            print(f"Saved in {SETTINGS_FILE}.")
-            return answer
-        print("That isn't an ID. It looks like 00000000-0000-0000-0000-000000000000.")
-    raise NavigatorError("No valid client ID was entered.")
+    return str(saved) if saved and re.fullmatch(GUID_PATTERN, str(saved)) else None
 
 
-def choose_tenant(args: list[str], ask_again: bool = False) -> str:
-    """Pick the tenant (see the order above); ask only when nothing says which one."""
+def known_tenant(args: list[str]) -> str | None:
+    """The tenant named on the command line or in the environment, by the only client ID file, or saved."""
     given = next((arg for arg in args if not arg.startswith("-")), "")
     given = given or os.environ.get("SHAREPOINT_NAVIGATOR_TENANT", "")
     if given.strip():
         return tenant_from_input(given)
     known = tenants_with_client_id()
+    if len(known) == 1:
+        return known[0]
     saved = str(load_settings().get("tenant") or "")
-    if not ask_again:
-        if len(known) == 1:
-            return known[0]
-        if saved:
-            return tenant_from_input(saved)
-    suggested = saved or (known[0] if known else "")
-    print("\nWhich Microsoft 365 organisation? Type the name in your SharePoint address,")
-    print("for example contoso for https://contoso.sharepoint.com.")
-    answer = input(f"SharePoint tenant name [{suggested}]: " if suggested else "SharePoint tenant name: ")
-    tenant = tenant_from_input(answer or suggested)
-    save_settings(tenant)
-    return tenant
+    try:
+        return tenant_from_input(saved) if saved else None
+    except NavigatorError:
+        return None
 
 
 def site_relative_folder(site_url: str, folder_path: str) -> str:
@@ -1237,21 +1236,36 @@ def server_relative_folder(site_url: str, folder_path: str) -> str:
 
 # ---- Local web service ----
 
-def run_server(tenant: str, port: int):
-    """Sign in, discover sites, and serve the page and API on 127.0.0.1 until stopped.
+def _safe_known_client_id(tenant: str) -> str | None:
+    """known_client_id that treats a bad tenant name or unreadable file as unknown."""
+    try:
+        return known_client_id(tenant_from_input(tenant))
+    except NavigatorError:
+        return None
 
+
+def run_server(port: int, tenant: str | None = None, client_id: str | None = None,
+               force_setup: bool = False, open_browser: bool = True):
+    """Serve the page and API on 127.0.0.1 at once, then set up and sign in in the background.
+
+    Stages, shown by the page from /api/status: "setup" (tenant or client ID unknown, or
+    force_setup) → "connecting" → "code" (the person signs in with a device code) → "connecting"
+    (finding sites) → "ready"; or "error". Routes that need SharePoint answer 409 until "ready".
     All shared state lives in this scope, captured by the nested functions and Handler. Returns
     after Ctrl+C, POST /api/stop or auto-stop.
     """
-    # ---- Startup: sign-in, clients, site list ----
-    tenant = tenant.lower()
-    client_id = read_client_id(tenant)
-    auth = AuthSession(tenant, client_id)
-    graph = GraphClient(auth)
-    sharepoint = SharePointRestClient(auth)
-    sites, site_source = discover_sites(tenant, sharepoint, graph)
-    print(f"Found {len(sites)} SharePoint sites from the {site_source}.", flush=True)
-    inventory = Inventory(graph, tenant, sites)
+    # ---- Connection: filled in by connect() once signed in ----
+    tenant = (tenant or "").lower() or None
+    auth = graph = sharepoint = inventory = None
+    sites: list[dict] = []
+    site_source = ""
+    # Requests may only touch sites from the discovered list, whatever the browser sends.
+    allowed_sites: set[str] = set()
+    # What the page shows while not ready. "generation" goes up on every new connect or setup, so a
+    # sign-in still waiting from before (e.g. after "Change organisation") stops and is ignored.
+    connect_lock = threading.Lock()
+    connect_state = {"phase": "setup", "generation": 0, "code": "", "verificationUri": "",
+                     "expiresAt": 0.0, "error": "", "step": ""}
 
     # ---- Shared state ----
     # Per-run secret injected into the page; every API call must present it.
@@ -1267,8 +1281,6 @@ def run_server(tenant: str, port: int):
     # Pages of folder children, same key; each entry is {"pages": [...], "context": ...}.
     folder_children_cache: dict[str, dict] = {}
     folder_children_lock = threading.Lock()
-    # Requests may only touch sites from the discovered list, whatever the browser sends.
-    allowed_sites = {normalize_site_url(site["url"]).lower() for site in sites}
     # Trim start and stop run one at a time, so a double click can't queue two jobs.
     trim_lock = threading.Lock()
     scan_lock = threading.Lock()
@@ -1317,6 +1329,90 @@ def run_server(tenant: str, port: int):
                 timer.daemon = True
                 session_state["timer"] = timer
                 timer.start()
+
+    # ---- Setup and sign-in (background) ----
+
+    def set_connect(generation: int, **values) -> bool:
+        """Update the page-visible stage, unless a newer connect or setup has replaced this one."""
+        with connect_lock:
+            if generation != connect_state["generation"]:
+                return False
+            connect_state.update(values)
+            return True
+
+    def connect(new_tenant: str, new_client_id: str):
+        """Sign in (reusing the saved sign-in, or with a device code the page shows), then find
+        the sites, on a background thread. On success the routes switch to the new tenant."""
+        with connect_lock:
+            connect_state["generation"] += 1
+            generation = connect_state["generation"]
+            connect_state.update(phase="connecting", step="signin", code="", verificationUri="",
+                                 expiresAt=0.0, error="")
+
+        def worker():
+            nonlocal tenant, auth, graph, sharepoint, inventory, sites, site_source, allowed_sites
+            try:
+                new_auth = AuthSession(new_tenant, new_client_id)
+                if not new_auth.signed_in():
+                    flow = new_auth.begin_device_flow()
+                    print(f"Sign-in code for Microsoft: {flow['user_code']} at {flow.get('verification_uri')}", flush=True)
+                    set_connect(generation, phase="code", code=flow["user_code"],
+                                verificationUri=flow.get("verification_uri") or "https://microsoft.com/devicelogin",
+                                expiresAt=time.time() + int(flow.get("expires_in") or 900))
+                    # Stops waiting when the app stops or the page starts a different setup.
+                    new_auth.complete_device_flow(flow, exit_condition=lambda flow: stopping.is_set()
+                                                  or connect_state["generation"] != generation)
+                    if connect_state["generation"] != generation:
+                        return
+                if not set_connect(generation, phase="connecting", step="sites"):
+                    return
+                new_graph = GraphClient(new_auth)
+                new_sharepoint = SharePointRestClient(new_auth)
+                found, source = discover_sites(new_tenant, new_sharepoint, new_graph)
+                print(f"Found {len(found)} SharePoint sites from the {source}.", flush=True)
+                with connect_lock:
+                    if generation != connect_state["generation"]:
+                        return
+                    tenant, auth, graph, sharepoint = new_tenant, new_auth, new_graph, new_sharepoint
+                    sites, site_source = found, source
+                    inventory = Inventory(new_graph, new_tenant, found)
+                    allowed_sites = {normalize_site_url(site["url"]).lower() for site in found}
+                    connect_state.update(phase="ready", step="", code="", error="")
+                # A new tenant starts with empty caches and no previews.
+                with storage_metric_lock:
+                    storage_metric_cache.clear()
+                with folder_children_lock:
+                    folder_children_cache.clear()
+                with pending_lock:
+                    pending.clear()
+            except Exception as exc:
+                print(f"Sign-in or site discovery failed: {exc}", flush=True)
+                set_connect(generation, phase="error", error=str(exc), code="")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def show_setup():
+        """Back to the setup screen; any sign-in still waiting stops (its generation is now old)."""
+        with connect_lock:
+            connect_state["generation"] += 1
+            connect_state.update(phase="setup", step="", code="", verificationUri="", expiresAt=0.0, error="")
+
+    def status_payload() -> dict:
+        """What /api/status returns: the stage, plus the tenant and sites once ready."""
+        with connect_lock:
+            state = dict(connect_state)
+        ready = state["phase"] == "ready"
+        suggested = tenant or str(load_settings().get("tenant") or "")
+        return {
+            "ok": True, "version": __version__, "phase": state["phase"], "step": state["step"],
+            "connected": ready, "tenantId": tenant if ready else "",
+            "siteCount": len(sites) if ready else 0, "siteSource": site_source if ready else "",
+            "code": state["code"], "verificationUri": state["verificationUri"],
+            "expiresIn": max(0, int(state["expiresAt"] - time.time())) if state["code"] else 0,
+            "error": state["error"], "suggestedTenant": suggested,
+            # The client ID question can be skipped when a file beside the app or the settings know it.
+            "clientIdKnown": bool(suggested and _safe_known_client_id(suggested)),
+        }
 
     # ---- Library scan (site and library roots only) ----
     # Read by /api/progress, written by the scan worker; always under scan_lock.
@@ -1612,9 +1708,7 @@ def run_server(tenant: str, port: int):
                 return
             try:
                 if self.path == "/api/status":
-                    self.send_json(200, {"ok": True, "connected": True, "siteCount": len(sites),
-                                         "siteSource": site_source, "tenantId": tenant,
-                                         "version": __version__})
+                    self.send_json(200, status_payload())
                     return
                 # ?cursor=N returns only rows the page has not received, plus nextCursor.
                 if self.path.startswith("/api/progress"):
@@ -1646,6 +1740,40 @@ def run_server(tenant: str, port: int):
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
                     return
                 payload = self.body_json()
+                # -- /api/setup: tenant and client ID from the setup screen; saved, then sign in.
+                if self.path == "/api/setup":
+                    new_tenant = tenant_from_input(str(payload.get("tenant") or ""))
+                    new_client_id = str(payload.get("clientId") or "").strip() or known_client_id(new_tenant)
+                    if not new_client_id or not re.fullmatch(GUID_PATTERN, new_client_id):
+                        raise NavigatorError("Enter the Application (client) ID. It looks like "
+                                             "00000000-0000-0000-0000-000000000000.")
+                    # Only a typed ID is saved; one from a file beside the app stays in that file.
+                    save_settings(new_tenant, new_client_id if payload.get("clientId") else None)
+                    connect(new_tenant, new_client_id)
+                    self.send_json(200, status_payload())
+                    return
+                # -- /api/setup-reset: show the setup screen again ("Change organisation").
+                if self.path == "/api/setup-reset":
+                    show_setup()
+                    self.send_json(200, status_payload())
+                    return
+                # -- /api/connect-retry: try the same sign-in again after an error or an expired code.
+                if self.path == "/api/connect-retry":
+                    retry_tenant = str(payload.get("tenant") or "") or tenant or str(load_settings().get("tenant") or "")
+                    retry_tenant = tenant_from_input(retry_tenant)
+                    retry_client_id = known_client_id(retry_tenant)
+                    if not retry_client_id:
+                        show_setup()
+                    else:
+                        connect(retry_tenant, retry_client_id)
+                    self.send_json(200, status_payload())
+                    return
+                # Everything below needs a signed-in connection.
+                with connect_lock:
+                    ready = connect_state["phase"] == "ready"
+                if not ready:
+                    self.send_json(409, {"ok": False, "error": "Not signed in to SharePoint yet.", "notReady": True})
+                    return
                 # -- /api/scan: start (or join) the background library-root scan.
                 if self.path == "/api/scan":
                     start_scan()
@@ -1948,14 +2076,17 @@ def run_server(tenant: str, port: int):
     server.daemon_threads = True
     server_holder["server"] = server
     base_url = f"http://127.0.0.1:{port}/"
-    print(f"\nSharePoint Navigator {__version__} is ready: {base_url}")
-    print("The page loads the Documents libraries of the sites found above.")
+    # Known tenant and client ID: sign in right away; otherwise the page shows the setup screen.
+    if tenant and client_id and not force_setup:
+        connect(tenant, client_id)
+    print(f"\nSharePoint Navigator {__version__} is running: {base_url}", flush=True)
     if auto_stop:
-        print("Closing the browser tab stops the app. Press Ctrl+C to stop it sooner.")
+        print("Closing the browser tab stops the app. Press Ctrl+C to stop it sooner.", flush=True)
     else:
-        print("Keep this terminal open while using the app. Press Ctrl+C to stop.")
+        print("Press Ctrl+C to stop.", flush=True)
     try:
-        webbrowser.open(base_url)
+        if open_browser:
+            webbrowser.open(base_url)
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
         pass
@@ -1999,6 +2130,66 @@ def self_check() -> int:
     return 0 if page_ok else 1
 
 
+def has_console() -> bool:
+    """True when started from a terminal; False for the windowless Windows app and the macOS .app."""
+    return sys.stdout is not None and hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+
+def use_log_file() -> None:
+    """Without a terminal, send all output to ~/.sharepoint-navigator/app.log (kept under 1 MB).
+
+    The windowless Windows build has no stdout at all, and messages are still worth keeping for
+    troubleshooting. Each start begins a fresh section; an oversized log is started over.
+    """
+    # Source runs keep their output (it may be piped to a file on purpose); the packaged app
+    # without a terminal, and anything with no stdout at all, write to the log.
+    if has_console() or (not FROZEN and sys.stdout is not None):
+        return
+    try:
+        USER_FOLDER.mkdir(parents=True, exist_ok=True)
+        log = USER_FOLDER / "app.log"
+        mode = "w" if log.is_file() and log.stat().st_size > 1_000_000 else "a"
+        stream = open(log, mode, encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = stream
+        print(f"\n---- {datetime.now().isoformat(timespec='seconds')} SharePoint Navigator {__version__} ----")
+    except OSError:
+        pass
+
+
+def show_fatal(message: str) -> None:
+    """Show a start-up error the person can see: the terminal if there is one, else a system dialog."""
+    print(f"\nSharePoint Navigator could not start: {message}", flush=True)
+    if has_console():
+        if FROZEN:
+            # A double-clicked console window would otherwise close before the error is read.
+            try:
+                input("Press Enter to close.")
+            except EOFError:
+                pass
+        return
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, "SharePoint Navigator", 0x10)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.run(["osascript", "-e", "on run argv", "-e",
+                            'display alert "SharePoint Navigator could not start" message (item 1 of argv) as critical',
+                            "-e", "end run", message], check=False, timeout=600)
+    except Exception:
+        pass
+
+
+def already_running(port: int) -> bool:
+    """True if this app already answers on the port (checked by its Server header)."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/favicon.ico", timeout=2) as response:
+            return "SharePointNavigator" in (response.headers.get("Server") or "")
+    except Exception:
+        return False
+
+
 def main():
     """Parse arguments and environment, then run the service or the self-check."""
     args = sys.argv[1:]
@@ -2007,29 +2198,27 @@ def main():
         raise SystemExit(0)
     if "--self-check" in args:
         raise SystemExit(self_check())
-    # --setup: ask for the tenant and client ID again (e.g. to switch organisation).
-    ask_again = "--setup" in args
-    tenant = choose_tenant(args, ask_again)
-    # Ask for (and save) the client ID now, before the server starts, so the question isn't
-    # mixed into the sign-in output.
-    read_client_id(tenant, ask_again)
     try:
         port = int(os.environ.get("SHAREPOINT_NAVIGATOR_PORT", "8765"))
     except ValueError as exc:
         raise NavigatorError("SHAREPOINT_NAVIGATOR_PORT must be a number.") from exc
-    run_server(tenant, port)
+    # Opened again while running: just bring the page back.
+    if already_running(port):
+        print(f"SharePoint Navigator is already running; opening http://127.0.0.1:{port}/", flush=True)
+        webbrowser.open(f"http://127.0.0.1:{port}/")
+        return
+    # Whatever isn't known yet (tenant, client ID) is asked on the page's setup screen.
+    # --setup shows that screen even when both are known (e.g. to switch organisation).
+    tenant = known_tenant(args)
+    client_id = known_client_id(tenant) if tenant else None
+    run_server(port, tenant, client_id, force_setup="--setup" in args)
 
 
 if __name__ == "__main__":
-    # Expected failures print a short message and exit 1 instead of a traceback.
+    use_log_file()
+    # Expected failures show a short message instead of a traceback.
     try:
         main()
     except (NavigatorError, OSError, requests.RequestException) as exc:
-        print(f"\nSharePoint Navigator could not start: {exc}")
-        if FROZEN:
-            # A double-clicked console window would otherwise close before the error is read.
-            try:
-                input("Press Enter to close.")
-            except EOFError:
-                pass
+        show_fatal(str(exc))
         raise SystemExit(1)

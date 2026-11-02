@@ -5,12 +5,14 @@ A local browser app that lets a Microsoft 365 admin browse every site's Document
 ## Files
 - `sharepoint-navigator.py`: the local service on 127.0.0.1:8765. It handles MSAL device-code sign-in, Graph (`GraphClient`), SharePoint REST (`SharePointRestClient`) and the API routes.
 - `sharepoint-navigator.html`: the UI, served by the service, which injects an `X-Local-Token`. Not to be confused with `powershell/SharePoint-Navigator.html` (old edition).
-- `build_app.py` + `requirements-build.txt`: PyInstaller one-file build for the current OS, written to `dist/`.
+- `build_app.py` + `requirements-build.txt`: PyInstaller build for the current OS, windowless, with the icon: `dist/SharePoint Navigator.app` (macOS, onedir, LSUIElement background app, re-signed ad hoc) or `dist/SharePoint Navigator.exe` (Windows, onefile). Without a terminal, output goes to `~/.sharepoint-navigator/app.log`, and start-up errors show a system dialog.
+- `assets/icon.svg` → `tools/make_icons.py` → `assets/icon.icns`, `assets/icon.ico`, `site/icon.png` (committed; needs Chrome + Pillow to remake). The app page's tab icon is the same SVG inline.
 - `tests/test_service.py`: offline tests (see below).
 - `site/`: the product page (index.html, style.css, site.js, icon, shots/), English with Korean swapped in by site.js; follows the system's light/dark setting. Deployed by `.github/workflows/pages.yml`.
 - `tools/demo.py`: runs the real app against a made-up tenant (the test fakes) for screenshots; `tools/shots.py` takes the page's screenshots with headless Chrome.
 - `.github/workflows/build.yml`: on a `v*` tag, runs the tests and builds macOS (Apple silicon) and Windows zips, attached to a GitHub release with fixed names the page links to.
-- Tenant and client ID: `<tenant>_clientid.txt` beside the app wins (admins ship it to staff); else `~/.sharepoint-navigator/settings.json`; else the app asks once and saves (`--setup` asks again). Never print, copy or commit a client ID; `*_clientid.txt` is git-ignored.
+- Start-up (no terminal needed): the server starts first; `/api/status` reports a stage (setup → connecting → code → ready, or error) and the page shows a setup form or the device code until "ready". Routes needing SharePoint answer 409 before that. `connect()` signs in on a thread; a generation counter drops a sign-in replaced by "Change organisation" (`/api/setup-reset`). A second launch while running just opens the page.
+- Tenant and client ID: `<tenant>_clientid.txt` beside the app (beside the .app on macOS) wins; else `~/.sharepoint-navigator/settings.json`; else the page's setup screen asks and saves. Never print, copy or commit a client ID; `*_clientid.txt` is git-ignored.
 
 ## Architecture
 - Graph handles site and library lookups, a folder's *direct* children (200 per page), rename/copy/move, and search (`/api/search` → `POST /search/query`, driveItem hits across all sites, read-only; results offer only Show in tree and Open).
