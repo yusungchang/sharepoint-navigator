@@ -56,6 +56,10 @@ run from source. `pages.yml` publishes `site/` when it changes.
 setup (the full guide is in the README) and downloads with first-launch steps per system, as on the PDF Epsilon
 page. Screenshots come in four versions (English/Korean × light/dark) and follow the visitor's choice.
 
+**Install, update and uninstall** are on the page and in the README: there's no installer (Windows SmartScreen
+signing was judged not worth it for now), so they are plain file steps, including the settings folder and, on macOS,
+the **msal-extensions** Keychain entry that holds the sign-in key.
+
 **Demo mode** (`tools/demo.py`): the real app against a made-up company (Contoso, nine sites, about 5,000 items,
 sizes and version history from a fixed seed), with sign-in and Microsoft replaced in memory and changes refused.
 `tools/shots.py` takes the eight screenshots with headless Chrome, so no real tenant data can appear in them.

@@ -37,6 +37,18 @@ The builds aren't signed with a paid certificate yet, so the first launch needs 
   Keychain; choose **Always Allow**.
 - **Windows:** if "Windows protected your PC" appears, click **More info**, then **Run anyway**.
 
+## Install, update and uninstall
+
+There's no installer: the app is one file, plus a settings folder in your user folder.
+
+- **Install:** unzip and keep the app in a folder that stays: Applications on macOS (drag it to the Dock if you like),
+  or e.g. `Documents\SharePoint Navigator` on Windows (Send to → Desktop for a shortcut).
+- **Update:** replace the file with the new one. The tenant, client ID and sign-in are kept. Each new version
+  shows the first-launch security step once more.
+- **Uninstall:** delete the app, then the settings folder: `~/.sharepoint-navigator` on macOS,
+  `%USERPROFILE%\.sharepoint-navigator` on Windows. On macOS also delete the **msal-extensions** entry in
+  Keychain Access (the key that encrypts the sign-in).
+
 ## First run
 
 The app asks two questions, once:

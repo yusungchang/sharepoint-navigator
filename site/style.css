@@ -172,4 +172,7 @@ footer { border-top: 1px solid var(--line); text-align: center; color: var(--mut
 .setup-note { max-width: 720px; margin: 16px auto 0; color: var(--muted); font-size: 14px; text-align: center; }
 .download .sub { margin-bottom: 32px; }
 .fine { margin: 10px 0 0; font-size: 12px; }
+/* Install / uninstall cards: steps start at the top (download cards push them to the bottom). */
+.install .steps { border-top: 0; padding-top: 0; margin-top: 0; }
+.install .steps h4 + ol { margin-bottom: 14px; }
 .showcase b { color: var(--ink); font-weight: 650; }
