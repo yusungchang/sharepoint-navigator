@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.0 | 2026-11-03 | Check for updates: a round arrow in the header asks GitHub for the newest version only when clicked, and offers the download page. The page and README now say GitHub is the one exception to "talks only to Microsoft". 72 offline tests. |
 | 1.0.1 | 2026-11-03 | The way back from search results is easier to find: Back to libraries stays at the top while scrolling and stands out; the browser's Back button and Esc anywhere also return to the tree. 72 offline tests. |
 | 1.0.0 | 2026-11-03 | Version 1.0, set by the owner. The same app as 0.8.0 (row menu, file dates, Delete with many confirmations), released as the first 1.x. 72 offline tests. |
 | 0.8.0 | 2026-11-03 | Delete for files and folders (to the site's recycle bin), behind many confirmations: live preview, tick-boxes, typed name and file count, a countdown and a last question; the service re-checks it all. 72 offline tests. |
@@ -33,6 +34,27 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.1.0, 3 November 2026
+
+**Check for updates.** The owner asked for an update check like PDF-Epsilon's, and this follows its rules:
+
+- A round arrow button sits beside the theme and language switches. Nothing is checked on its own: only a
+  click sends one request, to `api.github.com/repos/yusungchang/sharepoint-navigator/releases/latest`,
+  without cookies or a referrer. The page makes the request itself; the local service is unchanged.
+- Only a strictly formatted version number (`v1.2.3`) is trusted from the reply. Anything else, an error, a
+  rate limit or no network gives "Couldn't check right now" with a link to the website. A newer version gets
+  a button to the product page's download section; that address is fixed in the page, never taken from the
+  reply. The panel says that only the version number is asked for.
+- The panel closes on a click elsewhere or Esc (focus goes back to the button), follows the language switch
+  while open, and stays inside the window at phone width.
+- Honesty: the app, README and product page said the app talks only to Microsoft. They now name GitHub as the
+  one exception, only when the person clicks. The product page's first badge reads "No server of ours", and
+  the update steps mention the button.
+
+Checked in the demo with headless Chrome: the real GitHub answer (up to date at 1.0.1), and faked replies for
+a newer version (a planted `html_url` was ignored), an older one, no network, HTTP 403 and a malformed tag;
+English and Korean, light and dark, phone width. Screenshots retaken. Offline tests 72/72.
 
 ## 1.0.1, 3 November 2026
 

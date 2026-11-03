@@ -140,6 +140,19 @@
     .segmented button { border: 0; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
     .segmented button:hover { color: var(--text); }
     .segmented button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+    /* Check for updates: a round button beside the switches, with a small panel under it. */
+    .update-wrap { position: relative; display: inline-flex; }
+    .update-button { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--surface); cursor: pointer; }
+    .update-button:hover, .update-button[aria-expanded="true"] { color: var(--accent); }
+    .update-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .update-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; max-width: min(300px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--surface); box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.12); font-size: 13px; line-height: 1.45; }
+    .update-menu[hidden] { display: none; }
+    .update-menu p { margin: 0 0 6px; }
+    .update-menu .update-version { color: var(--muted); }
+    .update-menu .update-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+    .update-menu .update-new { color: var(--done-text); font-weight: 700; }
+    .update-menu a { display: inline-block; margin-top: 4px; font-weight: 650; }
+    .update-menu a.button { color: white; text-decoration: none; }
     /* Bar legend. Swatch colors match .bar-segment.current / .history. */
     .legend { color: var(--muted); font-size: 12px; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px 15px; }
     .legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -504,6 +517,13 @@
           <button type="button" data-lang-choice="en" lang="en">EN</button>
           <button type="button" data-lang-choice="ko" lang="ko">한국어</button>
         </div>
+        <!-- Check for updates (checkForUpdate): asks GitHub only when clicked -->
+        <div class="update-wrap">
+          <button class="update-button" id="updateButton" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="updateMenu" aria-label="Check for updates" data-i18n-aria="update.label" title="Check for updates" data-i18n-title="update.label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>
+          </button>
+          <div class="update-menu" id="updateMenu" role="status" aria-live="polite" hidden></div>
+        </div>
         <!-- Service badge (setBadge) -->
         <div class="badge" id="serviceBadge" title="The app runs only on this computer." data-i18n-title="badge.title">Connecting…</div>
         <button class="button hidden" id="stopServiceButton" type="button" data-i18n="button.stop">Stop app</button>
@@ -846,6 +866,10 @@
       // Phrase lists with shared keys; t() falls back to English, then the key.
       const I18N = {
         en: {
+          'update.label': 'Check for updates', 'update.current': 'You have version {version}.', 'update.checking': 'Checking…',
+          'update.latest': "You're up to date.", 'update.available': 'Version {version} is out.', 'update.download': 'Open the download page',
+          'update.failed': "Couldn't check right now. Check your connection, or visit the website.", 'update.site': 'Visit the website',
+          'update.note': 'Asks GitHub for the newest version number. Nothing else is sent.',
           'theme.label': 'Theme', 'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.system': 'System', 'lang.label': 'Language',
           'badge.title': 'The app runs only on this computer.', 'badge.connecting': 'Connecting…', 'badge.connected': '✓ Connected to SharePoint',
           'badge.notConnected': '⚠ Not connected', 'badge.openFromApp': '⚠ Not connected · open this page from the app',
@@ -994,6 +1018,10 @@
           'search.note': "Results come from SharePoint's search index, so very recent changes can take a few minutes to appear. Only items you can open are listed, and folder sizes aren't shown here."
         },
         ko: {
+          'update.label': '업데이트 확인', 'update.current': '지금 버전은 {version}입니다.', 'update.checking': '확인하는 중…',
+          'update.latest': '최신 버전입니다.', 'update.available': '{version} 버전이 나왔습니다.', 'update.download': '다운로드 페이지 열기',
+          'update.failed': '지금은 확인할 수 없습니다. 연결을 확인하거나 웹사이트를 방문하세요.', 'update.site': '웹사이트 방문',
+          'update.note': 'GitHub에 최신 버전 번호만 묻습니다. 다른 것은 보내지 않습니다.',
           'theme.label': '테마', 'theme.light': '라이트', 'theme.dark': '다크', 'theme.system': '시스템', 'lang.label': '언어',
           'badge.title': '이 앱은 이 컴퓨터에서만 실행됩니다.', 'badge.connecting': '연결 중…', 'badge.connected': '✓ SharePoint에 연결됨',
           'badge.notConnected': '⚠ 연결되지 않음', 'badge.openFromApp': '⚠ 연결되지 않음 · 앱에서 이 페이지를 여세요',
@@ -1189,6 +1217,7 @@
         if (loaded) render();
         if (trimState) renderTrimDialog();
         if (deleteState) renderDeleteDialog();
+        if (updateState.status) renderUpdate();
         if (searchState.active) { fillSearchScope(); renderSearch(); }
         if (connectState) { const status = connectState.status; connectState = null; renderConnect(status); }
       }
@@ -2612,6 +2641,100 @@
       $('trimCancel').addEventListener('click', () => $('trimDialog').close());
       $('trimClose').addEventListener('click', () => $('trimDialog').close());
       $('trimDialog').addEventListener('close', () => { trimState = null; });
+      // ---- Check for updates ----
+      // Only when the person clicks the round button: one request to GitHub for the newest
+      // published release, then a comparison of version numbers. Nothing about the tenant or
+      // files is sent (no cookies, no referrer). Only a strictly formatted version number is
+      // trusted from the reply, and the download page it offers is fixed here, never taken from it.
+      const UPDATE_LATEST = 'https://api.github.com/repos/yusungchang/sharepoint-navigator/releases/latest';
+      const UPDATE_PAGE = 'https://yusungchang.github.io/sharepoint-navigator/#download';
+      const updateButton = $('updateButton');
+      const updateMenu = $('updateMenu');
+      // What the panel shows: null (closed), 'checking', 'latest', 'available', 'failed'.
+      const updateState = { status: null, latest: null, seq: 0 };
+      // "v1.2.3" or "1.2.3" to [1, 2, 3]; anything else (a pre-release, junk) is not trusted.
+      function parseVersion(value) {
+        const match = /^v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(String(value || '').trim());
+        return match ? match.slice(1).map(Number) : null;
+      }
+      function versionNewer(a, b) {
+        for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+        return false;
+      }
+      // This app's version, as the service put it into the page ("__APP_VERSION__" if not).
+      const appVersion = parseVersion(appVersionEl.textContent);
+      // The newest release's version, or null when GitHub can't be reached (or limits requests).
+      async function fetchLatestVersion() {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(UPDATE_LATEST, {
+            signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store',
+            headers: { Accept: 'application/vnd.github+json' }
+          });
+          if (!response.ok) return null;
+          return parseVersion((await response.json()).tag_name);
+        } catch {
+          return null;
+        } finally {
+          window.clearTimeout(timer);
+        }
+      }
+      // Redraw the panel from updateState (also after a language change).
+      function renderUpdate() {
+        updateMenu.hidden = !updateState.status;
+        updateButton.setAttribute('aria-expanded', String(Boolean(updateState.status)));
+        if (!updateState.status) return;
+        const lines = [el('p', 'update-version', t('update.current', { version: appVersion ? appVersion.join('.') : '?' }))];
+        const link = (key, primary) => {
+          const a = el('a', primary ? 'button primary' : '', t(key));
+          a.href = UPDATE_PAGE;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          return a;
+        };
+        if (updateState.status === 'checking') lines.push(el('p', '', t('update.checking')));
+        else if (updateState.status === 'latest') lines.push(el('p', '', t('update.latest')));
+        else if (updateState.status === 'available') lines.push(el('p', 'update-new', t('update.available', { version: updateState.latest.join('.') })), link('update.download', true));
+        else lines.push(el('p', '', t('update.failed')), link('update.site', false));
+        lines.push(el('p', 'update-note', t('update.note')));
+        updateMenu.replaceChildren(...lines);
+      }
+      async function checkForUpdate() {
+        const seq = ++updateState.seq;
+        updateState.status = 'checking';
+        renderUpdate();
+        const latest = await fetchLatestVersion();
+        // Closed (or clicked again) meanwhile: drop this answer.
+        if (seq !== updateState.seq || !updateState.status) return;
+        updateState.latest = latest;
+        updateState.status = !latest || !appVersion ? 'failed' : versionNewer(latest, appVersion) ? 'available' : 'latest';
+        renderUpdate();
+      }
+      function closeUpdate() {
+        if (!updateState.status) return;
+        updateState.status = null;
+        updateState.seq++;
+        renderUpdate();
+      }
+      // The button toggles the panel; each opening checks again.
+      updateButton.addEventListener('click', event => {
+        event.stopPropagation();
+        if (updateState.status) closeUpdate();
+        else void checkForUpdate();
+      });
+      // Close on a click elsewhere or Esc (Esc doesn't also close search results).
+      document.addEventListener('mousedown', event => {
+        if (updateState.status && !updateMenu.contains(event.target) && !updateButton.contains(event.target)) closeUpdate();
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && updateState.status) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeUpdate();
+          updateButton.focus();
+        }
+      }, true);
       // ---- Delete ----
       // Deliberately slow, with many separate "are you sure" steps (the owner asked for that):
       //  1. the dialog fetches a live preview (/api/delete-inspect): path, size and, for a folder,

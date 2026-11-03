@@ -34,6 +34,9 @@ in ~/.sharepoint-navigator/, and SharePoint tokens come silently from the same r
 Entra app needs public client flows and admin-consented delegated Graph Sites.Read.All and
 Sites.ReadWrite.All, plus SharePoint AllSites.Read and (for version trim) AllSites.FullControl.
 
+Update check: the page itself (not this service) asks api.github.com for the newest release's
+version number, only when the person clicks Check for updates.
+
 Security: binds to 127.0.0.1 only. A random per-run token is injected into the page and required
 on every API call (X-Local-Token header, or the query string for EventSource); requests with any
 other Origin are refused.
@@ -75,7 +78,7 @@ from msal_extensions import PersistedTokenCache, build_encrypted_persistence
 
 # App version, "vibe" scheme x.y.z: each working session raises z; a meaningful change raises y
 # and resets z. The only place it is set; every change is recorded in docs/HISTORY.md.
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 # User files (client ID) live in APP_ROOT; bundled files (the HTML page) in RESOURCE_ROOT.
 FROZEN = bool(getattr(sys, "frozen", False))

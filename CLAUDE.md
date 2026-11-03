@@ -31,6 +31,7 @@ A local browser app that lets a Microsoft 365 admin browse every site's Document
 - Sizes load for visible rows and never block opening a folder. No Expand all; nothing starts expanded.
 - A 403 or other error on one site is skipped, and the scan continues.
 - Bind to 127.0.0.1 only; no shell or arbitrary command routes.
+- The only contact outside Microsoft is Check for updates (round arrow in the header, after PDF-Epsilon's): the page asks `api.github.com/repos/…/releases/latest` only when clicked, trusts only a strict `x.y.z` tag, and links to the fixed product-page download section. Never check on its own or send anything else.
 - Copy and Move stay within the item's own library; no transfers between sites (owner's rule). The picker has no library selector.
 - Delete must keep asking a lot (owner's rule): live preview, tick-boxes, the exact name typed, a folder's file count typed, a countdown (`DELETE_WAIT_SECONDS`, enforced by the service too) and a last browser confirm; the service re-checks everything and sends If-Match. Delete is only in the tree's row menu, never in search results, and never for a library root.
 - Search results offer only Show in tree and Open; everything else is done from the tree row (owner's choice).

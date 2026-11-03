@@ -24,7 +24,9 @@ macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/H
 - **Trim old versions** for a site (Automatic, older than N days, or keep N versions), with a typed
   confirmation and a stop button. Sites with a trim waiting, running or recently finished are marked.
 - **Stays on your computer.** The app listens on `127.0.0.1` only, talks only to Microsoft, and keeps the
-  sign-in in your system's protected storage (Keychain on macOS, DPAPI on Windows). No telemetry.
+  sign-in in your system's protected storage (Keychain on macOS, DPAPI on Windows). No telemetry. The one
+  exception is **Check for updates** (the round arrow at the top): only when you click it, the page asks
+  GitHub for the newest version number, and nothing else is sent.
 
 ## Download
 
