@@ -366,7 +366,11 @@
     /* ==== Search results: replace the tree (and its header and footnote) while a search is open ==== */
     .tree-panel.searching .tree-head, .tree-panel.searching #tree, .tree-panel.searching > .notice,
     .tree-panel.searching .toolbar .narrow-only { display: none; }
-    .search-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 16px 0; }
+    /* Back and the result count stay at the top of the window while the results scroll, so the
+       way back to the tree is always in view. Works because .tree-panel clips instead of scrolling. */
+    .search-top { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+    /* Back reads as the way out: accent text and border (one rule for light and dark, via the token). */
+    .search-back { color: var(--accent); border-color: currentColor; }
     .search-summary { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
     .search-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
     /* Same grid idea as the tree: header and rows share --columns. */
@@ -575,7 +579,7 @@
       <!-- Search results (runSearch): shown instead of the tree while a search is open -->
       <div class="search-view" id="searchView" hidden>
         <div class="search-top">
-          <button class="button" id="searchBack" type="button" data-i18n="search.back">← Back to libraries</button>
+          <button class="button search-back" id="searchBack" type="button" data-i18n="search.back" data-i18n-title="search.backTitle" title="Back to the library tree (Esc or the browser's Back button)">← Back to libraries</button>
           <span class="search-summary" id="searchSummary" aria-live="polite"></span>
         </div>
         <!-- Filters; changing one searches again. Values are the service's choice names. -->
@@ -935,7 +939,7 @@
           'trims.done': 'Finished', 'trims.failed': 'Failed', 'trims.stopped': 'Stopped',
           'trims.result': '{when} · {deleted} versions deleted · {freed} freed',
           'notice.title': 'About these numbers', 'size.tip': 'Current files: {current} · Version history: {history}',
-          'search.button': 'Search', 'search.back': '← Back to libraries',
+          'search.button': 'Search', 'search.back': '← Back to libraries', 'search.backTitle': "Back to the library tree (Esc or the browser's Back button)",
           'badge.signIn': 'Sign-in needed', 'connect.change': 'Change organisation',
           'row.download': 'Download', 'row.downloadTitle': 'Download {name}',
           'row.delete': 'Delete…',
@@ -1083,7 +1087,7 @@
           'trims.done': '완료', 'trims.failed': '실패', 'trims.stopped': '중지됨',
           'trims.result': '{when} · 버전 {deleted}개 삭제 · {freed} 확보',
           'notice.title': '이 숫자에 대해', 'size.tip': '현재 파일: {current} · 버전 기록: {history}',
-          'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기',
+          'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기', 'search.backTitle': '라이브러리 트리로 돌아갑니다 (Esc 또는 브라우저의 뒤로 버튼)',
           'badge.signIn': '로그인 필요', 'connect.change': '조직 바꾸기',
           'row.download': '다운로드', 'row.downloadTitle': '{name} 다운로드',
           'row.delete': '삭제…',
@@ -3394,17 +3398,32 @@
         select.value = sites.some(site => site.url === current) ? current : '';
       }
       // Swap the tree for the results (or back). The tree keeps its state underneath.
+      // Opening adds one browser history step, so the browser's Back button (or a mouse or
+      // trackpad back gesture) returns to the tree instead of leaving the app.
       function setSearchOpen(open) {
+        if (open && !searchState.active) history.pushState({ spnavSearch: true }, '');
         searchState.active = open;
         searchView.hidden = !open;
         treePanel.classList.toggle('searching', open);
       }
-      // Back to the tree; a reply still on its way is dropped.
-      function closeSearch() {
+      // Back to the tree; a reply still on its way is dropped. Closing from the page (Back
+      // button, Esc, clearing the box, Show in tree) also removes the history step it added.
+      function closeSearch(fromHistory = false) {
+        if (!searchState.active) return;
         searchState.seq++;
         searchState.loading = false;
         setSearchOpen(false);
+        if (!fromHistory && history.state && history.state.spnavSearch) history.back();
       }
+      // The browser went back (or forward) past the results: follow it.
+      addEventListener('popstate', () => {
+        if (searchState.active && !(history.state && history.state.spnavSearch)) closeSearch(true);
+      });
+      // The page does its own scrolling (Show in tree scrolls to the result); stop the browser
+      // from jumping back to an old position when the history step is removed.
+      history.scrollRestoration = 'manual';
+      // A reload keeps the history state but not the results; start from a clean entry.
+      if (history.state && history.state.spnavSearch) history.replaceState(null, '');
       // Run the search in the box (append = load the next block of the same search).
       async function runSearch(append = false) {
         const query = append ? searchState.query : searchEl.value.trim();
@@ -3639,7 +3658,15 @@
       });
       searchEl.addEventListener('input', () => { if (!searchEl.value && searchState.active) closeSearch(); });
       for (const select of Object.values(searchFilters)) select.addEventListener('change', () => { if (searchState.active) void runSearch(); });
-      $('searchBack').addEventListener('click', closeSearch);
+      $('searchBack').addEventListener('click', () => closeSearch());
+      // Esc anywhere goes back to the tree while results are shown, unless a dialog or the row
+      // menu has it (they close themselves first) or a drop-down is open.
+      document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || !searchState.active || event.defaultPrevented) return;
+        if (document.querySelector('dialog[open]') || !rowMenu.hidden || event.target.tagName === 'SELECT') return;
+        event.preventDefault();
+        closeSearch();
+      });
       // Search button: same as Enter; with an empty box it just puts the cursor in the box.
       $('searchButton').addEventListener('click', () => {
         if (!searchEl.value.trim() && !searchState.active) searchEl.focus();

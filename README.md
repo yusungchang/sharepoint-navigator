@@ -14,7 +14,8 @@ macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/H
 - **Storage used, split in two.** Each bar shows the current files (blue) and the version history SharePoint
   keeps (orange). One scale for every row: the largest library is 100%.
 - **Search across all sites.** One search through SharePoint's index, with filters for site, type, size and
-  date. **Show in tree** opens the folders down to the result and highlights it.
+  date. **Show in tree** opens the folders down to the result and highlights it. **← Back to libraries**
+  stays at the top while you scroll the results; Esc or the browser's Back button also return to the tree.
 - **Download** any file from the tree or from search results, without opening SharePoint.
 - **Rename, copy and move** within a library, with a preview and a check that the item hasn't changed meanwhile.
 - **Delete** a file or folder to the site's recycle bin, behind several confirmations: a live preview (a folder

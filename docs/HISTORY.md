@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.0.1 | 2026-11-03 | The way back from search results is easier to find: Back to libraries stays at the top while scrolling and stands out; the browser's Back button and Esc anywhere also return to the tree. 72 offline tests. |
 | 1.0.0 | 2026-11-03 | Version 1.0, set by the owner. The same app as 0.8.0 (row menu, file dates, Delete with many confirmations), released as the first 1.x. 72 offline tests. |
 | 0.8.0 | 2026-11-03 | Delete for files and folders (to the site's recycle bin), behind many confirmations: live preview, tick-boxes, typed name and file count, a countdown and a last question; the service re-checks it all. 72 offline tests. |
 | 0.7.0 | 2026-11-03 | Row actions move into one "⋯" menu per row (also on right-click), freeing the wide actions column. Files show their last-modified date under the size. 57 offline tests. |
@@ -32,6 +33,25 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.0.1, 3 November 2026
+
+**Getting back from search results.** The owner found it unclear how to return to the library tree after a
+search. The way back existed (a "← Back to libraries" button, Esc in the search box, clearing the box) but was
+easy to miss, and the button scrolled away with long result lists. Now:
+
+- The bar with Back and the result count sticks to the top of the window while the results scroll, and the
+  button has the accent colour so it reads as the way out. Its tooltip names the other ways back.
+- Opening results adds one browser history step, so the browser's Back button, a mouse back button or a
+  trackpad swipe returns to the tree instead of leaving the page. Closing the results any other way removes
+  that step again, so history never piles up; a reload starts clean. The browser's own scroll restoration is
+  off, so it can't fight Show in tree scrolling to the result.
+- Esc returns to the tree from anywhere on the page, not only the search box. An open dialog or row menu
+  takes Esc first, and so does an open drop-down.
+
+Checked in the demo with headless Chrome: each way back (browser Back, Esc on the page, the Back button, Show
+in tree), Esc with a row menu open (closes only the menu), a reload with results open, the sticky bar after
+scrolling, English and Korean. Search screenshots retaken. Offline tests 72/72.
 
 ## 1.0.0, 3 November 2026
 
