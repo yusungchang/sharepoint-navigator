@@ -3,6 +3,12 @@
 CLAUDE.local.md
 .claude/settings.local.json
 
+# Private, owner-only (moved from the iCloud copy on 2026-11-03): tenant history, admin change
+# snapshots, and the old PowerShell edition. Never commit these; the repo is public.
+HANDOVER.md
+admin-logs/
+powershell/
+
 # Python and builds
 .venv/
 .venv-*/

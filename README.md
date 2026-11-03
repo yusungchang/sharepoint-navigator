@@ -2,7 +2,7 @@
 
 **See where your SharePoint storage goes.** A small app for Microsoft 365 admins that runs on your own
 computer and shows every site's Documents library as one tree: how much each library and folder uses, how much
-of that is version history, and where any file is. You can rename, copy and move files and trim old versions.
+of that is version history, and where any file is. You can rename, copy, move and delete files and folders and trim old versions.
 
 Product page: <https://yusungchang.github.io/sharepoint-navigator/> · English and 한국어 · light and dark ·
 macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/HISTORY.md).
@@ -17,6 +17,9 @@ macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/H
   date. **Show in tree** opens the folders down to the result and highlights it.
 - **Download** any file from the tree or from search results, without opening SharePoint.
 - **Rename, copy and move** within a library, with a preview and a check that the item hasn't changed meanwhile.
+- **Delete** a file or folder to the site's recycle bin, behind several confirmations: a live preview (a folder
+  is counted down to its last file), tick-boxes, the exact name typed (and a folder's file count), a short
+  countdown and a last question. Whole libraries can't be deleted.
 - **Trim old versions** for a site (Automatic, older than N days, or keep N versions), with a typed
   confirmation and a stop button. Sites with a trim waiting, running or recently finished are marked.
 - **Stays on your computer.** The app listens on `127.0.0.1` only, talks only to Microsoft, and keeps the
@@ -81,7 +84,7 @@ Entra app once. No client secret is needed. A Global Administrator or Applicatio
 2. **Authentication** → **Advanced settings** → **Allow public client flows**: **Yes**. Save. (The app signs in
    with a device code.)
 3. **API permissions** → **Add a permission**, all **Delegated**:
-   - **Microsoft Graph:** `Sites.Read.All` (browse, sizes, search) and `Sites.ReadWrite.All` (rename, copy, move).
+   - **Microsoft Graph:** `Sites.Read.All` (browse, sizes, search) and `Sites.ReadWrite.All` (rename, copy, move, delete).
    - **SharePoint:** `AllSites.Read` (site list, sizes) and `AllSites.FullControl` (only for Trim old versions).
 4. Click **Grant admin consent for <your organisation>**.
 5. Copy the **Application (client) ID** from the app's Overview page. That's what the app asks for.
@@ -127,8 +130,8 @@ tests and build both, and attach them to a release ([.github/workflows/build.yml
 
 ## How it works
 
-- **Microsoft Graph** finds sites and libraries, lists a folder's direct children, renames, copies, moves and
-  searches (`POST /search/query`).
+- **Microsoft Graph** finds sites and libraries, lists a folder's direct children, renames, copies, moves,
+  deletes (to the recycle bin) and searches (`POST /search/query`).
 - **SharePoint REST**, with tokens from the same sign-in, gives the full site list (admin API
   `GetSitePropertiesFromSharePointByFilters`), folder sizes including versions (`StorageMetrics`; one request
   covers every subfolder of an opened folder), and site version trims (`StartDeleteFileVersionsByMode` and its
@@ -137,7 +140,8 @@ tests and build both, and attach them to a release ([.github/workflows/build.yml
   same); the rest is version history plus a little file information. SharePoint updates them with a delay
   of a few minutes.
 - Safety: Rename and Move send the item's eTag, so they fail rather than overwrite a change made meanwhile; Copy
-  never overwrites (a clash gets a new name); Copy and Move stay inside the item's own library. A trim is checked
+  never overwrites (a clash gets a new name); Copy and Move stay inside the item's own library. Delete re-checks the typed name, a folder's file count and
+  that nothing changed since the preview, waits a few seconds, and sends the eTag. A trim is checked
   against what SharePoint recorded right after it starts, and stopped at once if it differs. Every API call
   needs a per-run token, and other web pages can't call the app.
 

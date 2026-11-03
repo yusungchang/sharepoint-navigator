@@ -4,6 +4,8 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 0.8.0 | 2026-11-03 | Delete for files and folders (to the site's recycle bin), behind many confirmations: live preview, tick-boxes, typed name and file count, a countdown and a last question; the service re-checks it all. 72 offline tests. |
+| 0.7.0 | 2026-11-03 | Row actions move into one "⋯" menu per row (also on right-click), freeing the wide actions column. Files show their last-modified date under the size. 57 offline tests. |
 | 0.6.1 | 2026-11-02 | Fix: Download did nothing. Graph left out the download address because the request used `$select`; it now uses `select`. Failed downloads are logged with their reason. 57 offline tests. |
 | 0.6.0 | 2026-11-02 | No terminal window: setup and Microsoft sign-in happen in the browser page. Windowless apps with the app icon: `SharePoint Navigator.app` (macOS, background app) and `SharePoint Navigator.exe` (Windows). Change organisation from the page. Download button for files in the tree and in search results. 57 offline tests. |
 | 0.5.0 | 2026-11-02 | Public on GitHub (MIT) with a product page. First run asks for the tenant and client ID and saves them in the user's folder (`--setup` to change); a client ID file beside the app still wins. GitHub builds macOS and Windows apps on each release. Demo mode with a made-up company for screenshots. 52 offline tests. |
@@ -29,6 +31,53 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 0.8.0, 3 November 2026
+
+**Delete.** Files and folders can now be deleted from the tree's row menu ("Delete…", in red, at the bottom).
+The owner asked for it to ask for permission "excessively", so it does, on both sides:
+
+- The page opens a dialog that first fetches a live preview (`/api/delete-inspect`): name, path, site, size and,
+  for a folder, the number of files in all its subfolders (counted again, not taken from the tree). It says if
+  the item changed since the tree showed it.
+- Three tick-boxes must be ticked (four for a folder: "everything inside goes too: N files").
+- The exact name must be typed (capitals count), and for a folder the number of files inside.
+- Delete stays locked for a countdown (5 s). Then a last browser question repeats what goes and where.
+- The service (`/api/delete`) refuses unless the single-use preview is under 3 minutes old and at least 5 s old
+  (so the countdown can't be skipped), the acknowledgement is present, the typed name and file count match, and
+  a fresh snapshot (the folder walked again) is identical. Graph DELETE then goes with If-Match. Any refusal uses
+  the preview up, so the person has to start again with Check again.
+- Never for a library's root, never from search results (owner's rule: search offers only Show in tree and
+  Open), and only for sites in the loaded list. Rename previews and delete previews are kept apart, so one
+  can't be used as the other.
+
+Graph's DELETE moves the item to the site's recycle bin, so it can be restored from there (normally for up
+to 93 days). The dialog says so. Typed names are compared after Unicode NFC normalising, because names
+uploaded from a Mac can be stored decomposed (common for Korean) and couldn't be typed back otherwise.
+No new permission: `Sites.ReadWrite.All` already covers delete.
+
+Checked in the demo tenant with headless Chrome (folder and file, English light and Korean dark, phone width):
+countdown, a wrong count or wrong capitals keep Delete locked, declining the last question sends nothing, a
+refused delete forces Check again, and a delete removes the row and refreshes the folder. The demo itself stays
+read-only; the delete check used a scratch copy that allowed it in memory. Not run against the real tenant.
+Offline tests 72/72 (15 new delete tests; the service's wait is shortened for them with
+`SHAREPOINT_NAVIGATOR_DELETE_WAIT`).
+
+## 0.7.0, 3 November 2026
+
+**Row menu instead of a row of icons.** Each row used to show up to five icons (Open, Download, Rename, Copy,
+Move; Trim on libraries; Show in tree in search), which took a 164px column on every row. Now each row has one
+faint "⋯" button that opens a small menu with the same actions, with names instead of icon-only tooltips.
+Right-clicking a row opens the same menu at the pointer. The menu closes on Esc, a click elsewhere, scrolling or
+resizing; the arrow keys move through it. The actions column is now 32px in both the tree and search results.
+On narrow windows the button sits at the end of the name line instead of taking a line of its own.
+
+**File dates.** A file's last-modified date sits under its size in a smaller grey line; hovering shows the time.
+Folders don't show one: a SharePoint folder's date doesn't change when files inside it change, so it misleads.
+
+Checked in the demo tenant with headless Chrome (menus open in light and dark, English and Korean, with the
+right items for a file, a library and a search result). Offline tests 57/57. Screenshots on the product page
+were retaken.
 
 ## 0.6.1, 2 November 2026
 

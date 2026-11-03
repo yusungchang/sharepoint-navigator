@@ -148,7 +148,8 @@
     .legend-swatch.history { background: #f0ad4e; }
     /* ==== Tree grid and rows ==== */
     /* Header and rows share --columns; only the name cell is indented per depth. */
-    .tree-head, .row { --columns: minmax(260px, 1.5fr) minmax(180px, 1fr) 176px 64px 164px; }
+    /* The last column holds only the row's "⋯" menu button. */
+    .tree-head, .row { --columns: minmax(260px, 1.5fr) minmax(180px, 1fr) 176px 64px 32px; }
     /* Tenant address beside "Library / folder": the rows' /sites/... paths continue from it. Kept as typed (no caps). */
     .head-tenant { margin-left: 10px; text-transform: none; letter-spacing: 0; font-weight: 500; }
     .head-tenant:empty { display: none; }
@@ -223,6 +224,8 @@
     .size-line { display: grid; grid-template-columns: auto 64px; justify-content: end; align-items: center; column-gap: 6px; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
     .size-line-label { display: inline-flex; align-items: center; gap: 5px; }
     .size-line .legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
+    /* A file's last-modified date, under its size. */
+    .size-date { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
     .size-note { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
     /* "Size failed - Retry" link, shown when a size lookup failed. */
     .metric-retry { margin-top: 4px; border: 0; padding: 2px 0; color: var(--accent); background: transparent; font-size: 10px; cursor: pointer; }
@@ -250,6 +253,19 @@
     .open-link:hover, .item-action:hover, .open-link:focus-visible, .item-action:focus-visible { color: var(--accent); background: var(--surface-2); outline: none; }
     .item-action:disabled { opacity: .45; cursor: wait; }
     .action-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    /* "⋯" button: faint until the row is hovered, so a long list stays calm; always shown while its menu is open. */
+    .row-menu-button { opacity: .55; }
+    .row:hover .row-menu-button, .row-menu-button:focus-visible, .row-menu-button[aria-expanded="true"] { opacity: 1; }
+    .row-menu-button[aria-expanded="true"] { color: var(--accent); background: var(--surface-2); }
+    /* The row menu: one shared popup, placed with fixed coordinates next to the button or the pointer. */
+    .row-menu { position: fixed; z-index: 50; min-width: 190px; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.12); }
+    .row-menu[hidden] { display: none; }
+    .row-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; text-decoration: none; white-space: nowrap; cursor: pointer; }
+    .row-menu-item .action-icon { color: var(--muted); flex: 0 0 16px; }
+    .row-menu-item:hover, .row-menu-item:focus-visible { background: var(--surface-2); outline: none; }
+    .row-menu-item:hover .action-icon, .row-menu-item:focus-visible .action-icon { color: var(--accent); }
+    .row-menu-item:disabled { color: var(--muted); opacity: .55; cursor: not-allowed; background: transparent; }
+    .row-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
     [data-tip] { position: relative; }
     [data-tip]::after {
       content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5;
@@ -325,6 +341,23 @@
     .trim-warning { padding: 10px 12px; border: 1px solid var(--danger-border); border-radius: 10px; color: var(--danger); background: var(--danger-bg); line-height: 1.5; }
     .trim-confirm { display: grid; gap: 6px; }
     .trim-confirm code { padding: 1px 5px; border-radius: 5px; background: var(--surface-2); font-weight: 700; }
+    /* ==== Delete dialog (reuses the picker and trim styles) ==== */
+    #deleteDialog, #deleteDialog .picker { max-height: min(900px, calc(100vh - 36px)); }
+    /* What will be deleted: label / value pairs. */
+    .delete-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+    .delete-facts dt { color: var(--muted); }
+    .delete-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .delete-facts .delete-loading { grid-column: 1 / -1; color: var(--muted); font-weight: 400; }
+    .delete-changed { color: var(--danger); font-weight: 700; }
+    /* Each acknowledgement is its own tick-box; all of them must be ticked. */
+    .delete-checks { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+    .delete-check { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; line-height: 1.45; cursor: pointer; }
+    .delete-check input { margin: 2px 0 0; flex: 0 0 auto; }
+    .delete-check[hidden], .trim-confirm[hidden] { display: none; }
+    .delete-check:has(input:checked) { border-color: var(--danger-border); background: var(--danger-bg); }
+    /* Delete in the row menu is red, so it never reads like the harmless items above it. */
+    .row-menu-item.danger, .row-menu-item.danger .action-icon,
+    .row-menu-item.danger:hover .action-icon, .row-menu-item.danger:focus-visible .action-icon { color: var(--danger); }
     /* ==== Notes inside an opened folder ==== */
     /* Status notes and "Show 200 more"; the script sets their left margin. */
     .child-note { color: var(--muted); font-size: 12px; padding: 6px 0 8px; }
@@ -337,7 +370,7 @@
     .search-summary { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
     .search-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
     /* Same grid idea as the tree: header and rows share --columns. */
-    .search-head, .search-row { --columns: minmax(220px, 1.3fr) minmax(160px, 1fr) 96px 120px 96px; }
+    .search-head, .search-row { --columns: minmax(220px, 1.3fr) minmax(160px, 1fr) 96px 120px 32px; }
     .search-head { display: grid; grid-template-columns: var(--columns); gap: 16px; padding: 10px 24px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
     #searchResults { padding: 4px 12px 8px; }
     .search-row { min-height: 42px; }
@@ -410,17 +443,16 @@
       .tree-head { display: none; }
       #tree { --tree-pad: 4px; padding: 4px var(--tree-pad) 10px; }
       .row { grid-template-columns: minmax(0, 1fr) 112px; gap: 4px 10px; padding: 8px; }
-      .name-cell { grid-column: 1 / -1; }
+      .name-cell { grid-column: 1; grid-row: 1; }
       .bar-cell { grid-column: 1; }
       .size { grid-column: 2; }
       .count { display: none; }
-      .row-actions { grid-column: 1 / -1; }
+      .row-actions { grid-column: 2; grid-row: 1; justify-content: flex-end; }
       /* Search results: name and location on their own lines, then size and date. */
       .search-head { display: none; }
-      .search-row .name-cell, .search-row .search-where { grid-column: 1 / -1; }
+      .search-row .search-where { grid-column: 1 / -1; }
       .search-row .size { grid-column: 1; text-align: left; }
       .search-row .count { display: block; grid-column: 2; }
-      .search-row .row-actions { justify-content: flex-start; }
     }
     /* ==== Dark theme ==== */
     /* Two copies that MUST stay in sync: this media query (System on a dark OS,
@@ -671,6 +703,42 @@
         </div>
       </div>
     </dialog>
+    <!-- Delete dialog (openDeleteDialog): one file or folder, to the site's recycle bin.
+         Several separate confirmations on purpose; see renderDeleteDialog. -->
+    <dialog id="deleteDialog" aria-labelledby="deleteTitle">
+      <div class="picker">
+        <div class="picker-header">
+          <div><h2 class="picker-title" id="deleteTitle"></h2><div class="picker-hint" id="deleteHint"></div></div>
+          <button class="picker-close" id="deleteClose" type="button" aria-label="Close" data-i18n-aria="picker.close">×</button>
+        </div>
+        <div class="trim-body">
+          <!-- Live details from the service (/api/delete-inspect), not what the tree last showed -->
+          <section aria-live="polite">
+            <div class="trim-label" data-i18n="delete.detailsHeading">What will be deleted</div>
+            <dl class="delete-facts" id="deleteFacts"></dl>
+          </section>
+          <div class="trim-warning" data-i18n="delete.warning">Deleted items go to this site's recycle bin.</div>
+          <!-- Every tick-box must be ticked; the folder one shows only for folders -->
+          <fieldset class="delete-checks">
+            <legend class="trim-label" data-i18n="delete.checksHeading">Before you delete</legend>
+            <label class="delete-check"><input type="checkbox" id="deleteCheckRight"><span id="deleteCheckRightText"></span></label>
+            <label class="delete-check" id="deleteCheckContentsRow"><input type="checkbox" id="deleteCheckContents"><span id="deleteCheckContentsText"></span></label>
+            <label class="delete-check"><input type="checkbox" id="deleteCheckPeople"><span data-i18n="delete.checkPeople">People lose access right away.</span></label>
+            <label class="delete-check"><input type="checkbox" id="deleteCheckBin"><span data-i18n="delete.checkBin">Getting it back means the recycle bin.</span></label>
+          </fieldset>
+          <!-- Typing the exact name (and a folder's file count) unlocks Delete -->
+          <label class="trim-confirm"><span id="deleteNameLabel"></span><input id="deleteName" type="text" autocomplete="off" spellcheck="false"></label>
+          <label class="trim-confirm" id="deleteCountRow"><span data-i18n="delete.typeCount">Type how many files are inside</span><input id="deleteCount" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"></label>
+          <div class="trim-input-error" id="deleteError" role="alert"></div>
+        </div>
+        <div class="picker-footer">
+          <button class="picker-button" id="deleteRecheck" type="button" data-i18n="delete.recheck">Check again</button>
+          <span class="spacer"></span>
+          <button class="picker-button" id="deleteCancel" type="button" data-i18n="delete.cancel">Cancel</button>
+          <button class="picker-button danger" id="deleteConfirm" type="button" disabled></button>
+        </div>
+      </div>
+    </dialog>
   </main>
 
   <!-- Main application script -->
@@ -870,6 +938,28 @@
           'search.button': 'Search', 'search.back': '← Back to libraries',
           'badge.signIn': 'Sign-in needed', 'connect.change': 'Change organisation',
           'row.download': 'Download', 'row.downloadTitle': 'Download {name}',
+          'row.delete': 'Delete…',
+          'delete.titleFile': 'Delete file', 'delete.titleFolder': 'Delete folder', 'delete.detailsHeading': 'What will be deleted',
+          'delete.checksHeading': 'Before you delete', 'delete.checking': 'Checking the item in SharePoint…',
+          'delete.checkFailed': "Couldn't check the item: {error}",
+          'delete.name': 'Name', 'delete.path': 'Path', 'delete.site': 'Site', 'delete.size': 'Size (current files)',
+          'delete.filesInside': 'Files inside', 'delete.filesInsideValue': '{n} (in all subfolders)', 'delete.modified': 'Last modified',
+          'delete.changed': 'This item has changed since it was shown here. The details above are current; read them again.',
+          'delete.warning': "Deleted items go to this site's recycle bin. From there they can be restored, usually for up to 93 days, unless the bin is emptied sooner. Everyone loses access at once, and links to the item stop working.",
+          'delete.checkRightFile': 'I checked the name and path above. This is the file I want to delete.',
+          'delete.checkRightFolder': 'I checked the name and path above. This is the folder I want to delete.',
+          'delete.checkContents': 'Everything inside goes too: {n} files, in all its subfolders.',
+          'delete.checkPeople': 'People who use it lose it right away, and links to it stop working.',
+          'delete.checkBin': "I know that getting it back means restoring it from the site's recycle bin.",
+          'delete.typeName': 'Type the name exactly as shown (capitals count): {word}',
+          'delete.typeCount': 'Type how many files are inside (shown above)',
+          'delete.button': 'Delete', 'delete.waiting': 'Delete ({n})', 'delete.cancel': 'Cancel', 'delete.recheck': 'Check again',
+          'delete.finalFile': 'Last question: delete the file "{name}"?\n\n{path}\n\nIt goes to the site recycle bin.',
+          'delete.finalFolder': 'Last question: delete the folder "{name}" and the {n} files inside it?\n\n{path}\n\nThey go to the site recycle bin.',
+          'delete.done': "Deleted {name}. It's in the site recycle bin if you need it back.",
+          'delete.failed': "Couldn't delete: {error}", 'delete.failedStatus': 'Delete failed ({status})',
+          'delete.expired': 'This check is too old. Select Check again.', 'delete.used': 'Select Check again to start over.',
+          'row.more': 'Actions', 'row.moreTitle': 'Actions for {name}', 'row.modified': 'Modified {when}',
           'row.downloadStarted': 'Downloading {name}…', 'row.downloadFailed': "Couldn't get a download link.",
           'confirm.changeOrg': 'Switch to another organisation? You will sign in again; nothing in SharePoint changes.',
           'connect.setupTitle': 'Connect to your Microsoft 365',
@@ -996,6 +1086,28 @@
           'search.button': '검색', 'search.back': '← 라이브러리로 돌아가기',
           'badge.signIn': '로그인 필요', 'connect.change': '조직 바꾸기',
           'row.download': '다운로드', 'row.downloadTitle': '{name} 다운로드',
+          'row.delete': '삭제…',
+          'delete.titleFile': '파일 삭제', 'delete.titleFolder': '폴더 삭제', 'delete.detailsHeading': '삭제할 항목',
+          'delete.checksHeading': '삭제하기 전에', 'delete.checking': 'SharePoint에서 항목을 확인하는 중…',
+          'delete.checkFailed': '항목을 확인하지 못했습니다: {error}',
+          'delete.name': '이름', 'delete.path': '경로', 'delete.site': '사이트', 'delete.size': '크기(현재 파일)',
+          'delete.filesInside': '포함된 파일', 'delete.filesInsideValue': '{n}개 (모든 하위 폴더 포함)', 'delete.modified': '마지막 수정',
+          'delete.changed': '이 항목은 화면에 표시된 이후 변경되었습니다. 위 정보가 최신 상태이니 다시 읽어 보세요.',
+          'delete.warning': '삭제한 항목은 이 사이트의 휴지통으로 이동합니다. 휴지통을 먼저 비우지 않으면 보통 최대 93일 동안 복원할 수 있습니다. 모든 사람이 즉시 접근할 수 없게 되고, 이 항목의 링크도 더 이상 작동하지 않습니다.',
+          'delete.checkRightFile': '위의 이름과 경로를 확인했습니다. 삭제하려는 파일이 맞습니다.',
+          'delete.checkRightFolder': '위의 이름과 경로를 확인했습니다. 삭제하려는 폴더가 맞습니다.',
+          'delete.checkContents': '안에 있는 모든 것도 함께 삭제됩니다: 모든 하위 폴더의 파일 {n}개.',
+          'delete.checkPeople': '이 항목을 쓰는 사람들은 즉시 접근할 수 없게 되고, 링크도 작동하지 않습니다.',
+          'delete.checkBin': '되돌리려면 사이트 휴지통에서 복원해야 한다는 것을 알고 있습니다.',
+          'delete.typeName': '표시된 이름을 대소문자까지 똑같이 입력하세요: {word}',
+          'delete.typeCount': '안에 있는 파일 수를 입력하세요(위 참고)',
+          'delete.button': '삭제', 'delete.waiting': '삭제 ({n})', 'delete.cancel': '취소', 'delete.recheck': '다시 확인',
+          'delete.finalFile': '마지막 확인: 파일 "{name}"을(를) 삭제할까요?\n\n{path}\n\n사이트 휴지통으로 이동합니다.',
+          'delete.finalFolder': '마지막 확인: 폴더 "{name}"과(와) 안에 있는 파일 {n}개를 삭제할까요?\n\n{path}\n\n사이트 휴지통으로 이동합니다.',
+          'delete.done': '{name}을(를) 삭제했습니다. 필요하면 사이트 휴지통에서 되돌릴 수 있습니다.',
+          'delete.failed': '삭제하지 못했습니다: {error}', 'delete.failedStatus': '삭제 실패 ({status})',
+          'delete.expired': '확인한 지 너무 오래되었습니다. 다시 확인을 선택하세요.', 'delete.used': '처음부터 다시 하려면 다시 확인을 선택하세요.',
+          'row.more': '작업', 'row.moreTitle': '{name} 작업', 'row.modified': '수정: {when}',
           'row.downloadStarted': '{name} 다운로드 중…', 'row.downloadFailed': '다운로드 링크를 받지 못했습니다.',
           'confirm.changeOrg': '다른 조직으로 바꿀까요? 다시 로그인하게 되며, SharePoint의 내용은 바뀌지 않습니다.',
           'connect.setupTitle': 'Microsoft 365에 연결',
@@ -1072,6 +1184,7 @@
         updateStats();
         if (loaded) render();
         if (trimState) renderTrimDialog();
+        if (deleteState) renderDeleteDialog();
         if (searchState.active) { fillSearchScope(); renderSearch(); }
         if (connectState) { const status = connectState.status; connectState = null; renderConnect(status); }
       }
@@ -1497,10 +1610,14 @@
         up: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
         folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
         chevron: '<path d="M9 6l6 6-6 6"/>',
+        // Three dots: the row menu.
+        more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
         // Arrow into a tray: Download (files only).
         download: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 19h14"/>',
         // Folder with a magnifier: "Show in tree" (like Finder's Show in Enclosing Folder). Shape after Lucide folder-search (ISC).
         reveal: '<path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"/><circle cx="17" cy="17" r="3"/><path d="M21 21l-1.9-1.9"/>',
+        // Plain trash can: Delete (a file or folder, to the recycle bin).
+        delete: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M10 11v6"/><path d="M14 11v6"/>',
         // Trash can with a clock: permanent deletion of old versions. A plain trash can
         // would read as "delete this library".
         trim: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><circle cx="12" cy="14" r="3.6"/><path d="M12 12.4v1.8l1.2.8"/>'
@@ -1628,6 +1745,13 @@
         const sizeCell = el('span', 'size');
         if (!isContainer) {
           sizeCell.append(el('span', 'size-main', fmtBytes(node.sizeBytes)));
+          // Last modified, short date; the tooltip adds the time.
+          const date = fmtDate(node.lastModified);
+          if (date) {
+            const dateLine = el('span', 'size-date', date);
+            dateLine.title = t('row.modified', { when: fmtWhen(node.lastModified) });
+            sizeCell.append(dateLine);
+          }
         } else if (measured) {
           sizeCell.append(el('span', 'size-main', fmtBytes(node.sizeBytes)));
           sizeCell.append(sizeLine('current', t('legend.current'), node.currentFileBytes || 0));
@@ -1655,57 +1779,40 @@
         // File count (folders and libraries only).
         const countCell = el('span', 'count', isContainer ? (measured ? node.fileCount.toLocaleString() : '—') : '');
 
-        // Actions.
+        // Actions: one "⋯" menu (also on right-click) instead of a column of icons. The list is
+        // built when the menu opens, so it follows the current language and service state.
         const actionsCell = el('span', 'row-actions');
-        if (node.url) {
-          const link = document.createElement('a');
-          link.className = 'open-link';
-          link.href = node.url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          setActionIcon(link, 'open', t('row.openTitle'), t('row.openTitle'));
-          // Don't also toggle the row.
-          link.addEventListener('click', e => e.stopPropagation());
-          actionsCell.append(link);
-        }
-        // Download: files only, and only with the service.
-        if (node.kind === 'file' && serviceOnline && node.siteUrl && node.path) addDownloadButton(actionsCell, node.siteUrl, node.path, node.name);
-        // Rename, Copy, Move: folders and files only, and only with the service.
-        if ((node.kind === 'folder' || node.kind === 'file') && serviceOnline) {
-          const rename = el('button', 'item-action');
-          rename.type = 'button';
-          setActionIcon(rename, 'rename', t('row.rename'), t('row.renameTitle', { name: node.name }));
-          rename.addEventListener('click', e => {
-            e.preventDefault();
-            e.stopPropagation();
-            renameFolder(node, parentNode, rename);
-          });
-          actionsCell.append(rename);
-          for (const operation of ['copy', 'move']) {
-            const action = el('button', 'item-action');
-            action.type = 'button';
-            setActionIcon(action, operation,
-              t(operation === 'copy' ? 'transfer.copyTitle' : 'transfer.moveTitle'),
-              t(operation === 'copy' ? 'row.copyTitle' : 'row.moveTitle', { name: node.name }));
-            action.addEventListener('click', event => {
-              event.preventDefault();
-              event.stopPropagation();
-              openTransferPicker(operation, node, parentNode);
-            });
-            actionsCell.append(action);
+        const rowActions = () => {
+          const items = [];
+          if (node.url) items.push({ icon: 'open', label: t('row.openTitle'), href: node.url });
+          // Download: files only, and only with the service.
+          if (node.kind === 'file' && serviceOnline && node.siteUrl && node.path) {
+            items.push({ icon: 'download', label: t('row.download'), run: button => void downloadItem(node.siteUrl, node.path, node.name, button) });
           }
-        }
-        // Trim old versions: on library rows, which stand for their site, and only with the service.
-        if (node.kind === 'library' && node.siteUrl && serviceOnline) {
-          const trim = el('button', 'item-action');
-          trim.type = 'button';
-          setActionIcon(trim, 'trim', t('row.trim'), t('row.trimTitle', { name: node.siteTitle || node.siteUrl }));
-          trim.addEventListener('click', event => {
+          // Rename, Copy, Move: folders and files only, and only with the service.
+          if ((node.kind === 'folder' || node.kind === 'file') && serviceOnline) {
+            items.push({ separator: true });
+            items.push({ icon: 'rename', label: t('row.rename'), run: button => renameFolder(node, parentNode, button) });
+            items.push({ icon: 'copy', label: t('transfer.copyTitle'), run: () => openTransferPicker('copy', node, parentNode) });
+            items.push({ icon: 'move', label: t('transfer.moveTitle'), run: () => openTransferPicker('move', node, parentNode) });
+            // Delete sits apart at the bottom, in red, and only opens the confirmation dialog.
+            items.push({ separator: true });
+            items.push({ icon: 'delete', label: t('row.delete'), danger: true, run: () => openDeleteDialog(node, parentNode) });
+          }
+          // Trim old versions: on library rows, which stand for their site, and only with the service.
+          if (node.kind === 'library' && node.siteUrl && serviceOnline) {
+            items.push({ separator: true });
+            items.push({ icon: 'trim', label: t('row.trim'), title: t('row.trimTitle', { name: node.siteTitle || node.siteUrl }), run: () => openTrimDialog(node) });
+          }
+          return items;
+        };
+        if (rowActions().length) {
+          const menuButton = rowMenuButton(node.name, rowActions);
+          actionsCell.append(menuButton);
+          summary.addEventListener('contextmenu', event => {
             event.preventDefault();
-            event.stopPropagation();
-            openTrimDialog(node);
+            openRowMenu(menuButton, rowActions(), { x: event.clientX, y: event.clientY });
           });
-          actionsCell.append(trim);
         }
         summary.append(nameCell, barCell, sizeCell, countCell, actionsCell);
         details.append(summary);
@@ -2501,6 +2608,188 @@
       $('trimCancel').addEventListener('click', () => $('trimDialog').close());
       $('trimClose').addEventListener('click', () => $('trimDialog').close());
       $('trimDialog').addEventListener('close', () => { trimState = null; });
+      // ---- Delete ----
+      // Deliberately slow, with many separate "are you sure" steps (the owner asked for that):
+      //  1. the dialog fetches a live preview (/api/delete-inspect): path, size and, for a folder,
+      //     every file in all its subfolders, and says if it changed since the tree showed it;
+      //  2. every tick-box must be ticked (the folder one only for folders);
+      //  3. the exact name must be typed, and for a folder the number of files inside;
+      //  4. Delete stays locked for a countdown (the service refuses a quicker confirmation too);
+      //  5. a last browser confirm repeats what goes and where it ends up.
+      // The service then re-checks the name, the count and that nothing changed before it sends
+      // the delete. Any refusal uses the preview up, so the person has to start again.
+      // State of the open dialog; null when closed. preview: the service's answer (null while
+      // checking); used: the preview was spent by a refused delete; busy: a request is in flight.
+      let deleteState = null;
+      const DELETE_CHECKS = ['deleteCheckRight', 'deleteCheckContents', 'deleteCheckPeople', 'deleteCheckBin'];
+      function openDeleteDialog(node, parentNode) {
+        if (!serviceOnline || !node.path || (node.kind !== 'file' && node.kind !== 'folder')) return;
+        deleteState = { node, parentNode, preview: null, error: '', used: false, busy: false, readyAt: 0, expiresAt: 0, timer: 0 };
+        renderDeleteDialog();
+        $('deleteDialog').showModal();
+        void loadDeletePreview();
+      }
+      // Clear every tick and typed answer, so each preview is confirmed from scratch.
+      function resetDeleteInputs() {
+        for (const id of DELETE_CHECKS) $(id).checked = false;
+        $('deleteName').value = '';
+        $('deleteCount').value = '';
+      }
+      // Ask the service for a fresh preview; the answer is dropped if the dialog moved on.
+      async function loadDeletePreview() {
+        const state = deleteState;
+        if (!state) return;
+        window.clearInterval(state.timer);
+        Object.assign(state, { preview: null, error: '', used: false, busy: true });
+        resetDeleteInputs();
+        renderDeleteDialog();
+        const { node } = state;
+        try {
+          const response = await fetch('/api/delete-inspect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              siteUrl: node.siteUrl, itemPath: node.path, itemType: node.kind,
+              expectedModified: node.lastModified || '',
+              // Folders are compared only when their size was measured here.
+              expectedSizeBytes: node.kind === 'file' ? (node.sizeBytes || 0) : node.sharePointMetric ? node.sharePointMetric.totalFileStreamSize : null,
+              expectedFileCount: node.kind === 'folder' && node.sharePointMetric ? node.fileCount : null
+            })
+          });
+          const preview = await response.json().catch(() => ({}));
+          if (!response.ok || !preview.ok) throw new Error(preview.error || t('delete.failedStatus', { status: response.status }));
+          if (deleteState !== state) return;
+          state.preview = preview;
+          // The countdown starts when the preview arrives, so it always ends after the service's own wait.
+          state.readyAt = Date.now() + (Number(preview.waitSeconds) || 0) * 1000 + 300;
+          // Stop a little before the service's expiry, so a click never races it.
+          state.expiresAt = Date.now() + (Number(preview.expiresMinutes) || 3) * 60000 - 10000;
+          state.timer = window.setInterval(renderDeleteDialog, 250);
+        } catch (error) {
+          if (deleteState === state) state.error = t('delete.checkFailed', { error: error.message });
+        } finally {
+          if (deleteState === state) {
+            state.busy = false;
+            renderDeleteDialog();
+          }
+        }
+      }
+      // True when every tick-box is ticked and the typed answers match the preview exactly.
+      function deleteAnswersComplete(preview) {
+        const isFolder = preview.itemType === 'folder';
+        const ticked = DELETE_CHECKS.every(id => (id === 'deleteCheckContents' && !isFolder) || $(id).checked);
+        // Same comparison as the service: NFC, case and spaces count.
+        const nameOk = $('deleteName').value.normalize('NFC') === String(preview.name).normalize('NFC');
+        const countOk = !isFolder || Number($('deleteCount').value.replace(/[,\s]/g, '')) === Number(preview.fileCount) && $('deleteCount').value.trim() !== '';
+        return ticked && nameOk && countOk;
+      }
+      // Redraw the dialog from deleteState: details, tick-box texts, and whether Delete unlocks.
+      function renderDeleteDialog() {
+        const state = deleteState;
+        if (!state) return;
+        const { node, preview } = state;
+        const isFolder = node.kind === 'folder';
+        $('deleteTitle').textContent = t(isFolder ? 'delete.titleFolder' : 'delete.titleFile');
+        $('deleteHint').replaceChildren(el('div', 'trim-url', node.name));
+        // Details: only what the service just read, never the tree's older numbers.
+        const facts = $('deleteFacts');
+        facts.replaceChildren();
+        const fact = (key, value, className = '') => facts.append(el('dt', '', t(key)), el('dd', className, value));
+        if (!preview) {
+          facts.append(el('dd', 'delete-loading', state.busy ? t('delete.checking') : ''));
+        } else {
+          fact('delete.name', preview.name);
+          fact('delete.path', preview.path);
+          fact('delete.site', preview.siteUrl);
+          fact('delete.size', fmtBytes(preview.sizeBytes));
+          if (isFolder) fact('delete.filesInside', t('delete.filesInsideValue', { n: Number(preview.fileCount || 0).toLocaleString() }));
+          fact('delete.modified', preview.modified ? fmtWhen(preview.modified) : t('rename.unknown'));
+          if (preview.changedSinceReport) facts.append(el('dd', 'delete-loading delete-changed', t('delete.changed')));
+        }
+        // Tick-box texts that depend on the item.
+        $('deleteCheckRightText').textContent = t(isFolder ? 'delete.checkRightFolder' : 'delete.checkRightFile');
+        $('deleteCheckContentsRow').hidden = !isFolder;
+        $('deleteCheckContentsText').textContent = t('delete.checkContents', { n: preview ? Number(preview.fileCount || 0).toLocaleString() : '…' });
+        $('deleteCountRow').hidden = !isFolder;
+        // "Type <name>", with the name set apart.
+        const [before, after] = t('delete.typeName').split('{word}');
+        $('deleteNameLabel').replaceChildren(document.createTextNode(before ?? ''), el('code', '', preview ? preview.name : node.name), document.createTextNode(after ?? ''));
+        // Inputs work only once there's a live preview to confirm.
+        const inputsOff = !preview || state.busy || state.used;
+        for (const id of [...DELETE_CHECKS, 'deleteName', 'deleteCount']) $(id).disabled = inputsOff;
+        // Delete: preview, every answer, countdown over, not expired, not used, nothing in flight.
+        const now = Date.now();
+        const expired = Boolean(preview) && now > state.expiresAt;
+        const remaining = preview ? Math.max(0, Math.ceil((state.readyAt - now) / 1000)) : 0;
+        const complete = Boolean(preview) && deleteAnswersComplete(preview);
+        const button = $('deleteConfirm');
+        button.textContent = remaining > 0 ? t('delete.waiting', { n: remaining }) : t('delete.button');
+        button.disabled = !complete || remaining > 0 || expired || state.used || state.busy;
+        $('deleteError').textContent = state.error ? state.error + (state.used ? ' ' + t('delete.used') : '') : expired ? t('delete.expired') : '';
+        $('deleteRecheck').disabled = state.busy;
+        // Nothing left to count down or wait for: stop the redraw timer.
+        if (expired || state.used) window.clearInterval(state.timer);
+      }
+      // The last question, then the delete itself. The service checks everything again.
+      async function confirmDelete() {
+        const state = deleteState;
+        if (!state || !state.preview || $('deleteConfirm').disabled || !deleteAnswersComplete(state.preview)) return;
+        const { preview, node, parentNode } = state;
+        const isFolder = preview.itemType === 'folder';
+        const question = isFolder
+          ? t('delete.finalFolder', { name: preview.name, n: Number(preview.fileCount || 0).toLocaleString(), path: preview.path })
+          : t('delete.finalFile', { name: preview.name, path: preview.path });
+        if (!window.confirm(question)) return;
+        // The dialog may have been closed while the browser's question was open.
+        if (deleteState !== state) return;
+        state.busy = true;
+        renderDeleteDialog();
+        try {
+          const response = await fetch('/api/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({
+              deleteId: preview.deleteId,
+              confirmName: $('deleteName').value,
+              confirmFileCount: isFolder ? $('deleteCount').value : null,
+              acknowledge: 'delete-to-recycle-bin'
+            })
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result.ok) throw new Error(result.error || t('delete.failedStatus', { status: response.status }));
+          $('deleteDialog').close();
+          // Take the row out at once, then refresh sizes and the parent folder's listing.
+          if (parentNode) parentNode.children.delete(node.name);
+          await invalidateAfterTransfer('move', parentNode, null);
+          const message = t('delete.done', { name: result.name || preview.name });
+          setBadgeText('✓ ' + message);
+          $('status').classList.add('success');
+          $('status').textContent = message;
+        } catch (error) {
+          // A refused delete has used up the preview; only Check again goes on from here.
+          if (deleteState === state) {
+            state.error = t('delete.failed', { error: error.message });
+            state.used = true;
+          }
+        } finally {
+          if (deleteState === state) {
+            state.busy = false;
+            renderDeleteDialog();
+          }
+        }
+      }
+      for (const id of [...DELETE_CHECKS, 'deleteName', 'deleteCount']) $(id).addEventListener('input', renderDeleteDialog);
+      // Enter in a text box must not delete; only a click on Delete does.
+      for (const id of ['deleteName', 'deleteCount']) $(id).addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
+      $('deleteConfirm').addEventListener('click', () => void confirmDelete());
+      $('deleteRecheck').addEventListener('click', () => void loadDeletePreview());
+      $('deleteCancel').addEventListener('click', () => $('deleteDialog').close());
+      $('deleteClose').addEventListener('click', () => $('deleteDialog').close());
+      $('deleteDialog').addEventListener('close', () => {
+        if (deleteState) window.clearInterval(deleteState.timer);
+        deleteState = null;
+        resetDeleteInputs();
+      });
       // ---- Rename ----
       // Rewrite paths and URLs from oldPrefix to newPrefix in a subtree.
       function updateRenamedPath(node, oldPrefix, newPrefix, siteUrl) {
@@ -2943,40 +3232,148 @@
       // ---- Download ----
       // Ask the app for the file's short-lived download address (from Microsoft, valid about an
       // hour), then let the browser save it. The page stays where it is.
-      function addDownloadButton(target, siteUrl, itemPath, name) {
-        const button = el('button', 'item-action');
+      // button is the row's menu button, disabled while the link is fetched.
+      async function downloadItem(siteUrl, itemPath, name, button) {
+        if (button) button.disabled = true;
+        try {
+          const response = await fetch('/api/download-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
+            body: JSON.stringify({ siteUrl, itemPath })
+          });
+          const value = await response.json();
+          if (!response.ok || !value.ok) throw new Error(value.error || t('row.downloadFailed'));
+          const link = document.createElement('a');
+          link.href = value.url;
+          link.download = value.name || name;
+          link.rel = 'noopener';
+          document.body.append(link);
+          link.click();
+          link.remove();
+          $('status').className = 'status success';
+          $('status').textContent = t('row.downloadStarted', { name: value.name || name });
+        } catch (err) {
+          $('status').className = 'status';
+          $('status').textContent = err.message || t('row.downloadFailed');
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+
+      // ---- Row menu ----
+      // One shared popup for every row's "⋯" button and right-click. Items:
+      // { icon, label, title?, href? (opens in a new tab), run?(button), disabled? } or { separator: true }.
+      const rowMenu = el('div', 'row-menu');
+      rowMenu.setAttribute('role', 'menu');
+      rowMenu.hidden = true;
+      document.body.append(rowMenu);
+      let rowMenuOwner = null; // the "⋯" button whose menu is open
+      // Short date in the page language ('' when missing or unreadable).
+      function fmtDate(iso) {
+        const date = iso ? new Date(iso) : null;
+        return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString(lang === 'ko' ? 'ko-KR' : undefined, { dateStyle: 'medium' }) : '';
+      }
+      function rowMenuButton(name, actions) {
+        const button = el('button', 'item-action row-menu-button');
         button.type = 'button';
-        setActionIcon(button, 'download', t('row.download'), t('row.downloadTitle', { name }));
-        button.addEventListener('click', async event => {
+        setActionIcon(button, 'more', t('row.more'), t('row.moreTitle', { name }));
+        button.setAttribute('aria-haspopup', 'menu');
+        button.setAttribute('aria-expanded', 'false');
+        button.addEventListener('click', event => {
+          // Don't also open or close the tree row.
           event.preventDefault();
           event.stopPropagation();
-          button.disabled = true;
-          try {
-            const response = await fetch('/api/download-link', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Local-Token': serviceToken },
-              body: JSON.stringify({ siteUrl, itemPath })
-            });
-            const value = await response.json();
-            if (!response.ok || !value.ok) throw new Error(value.error || t('row.downloadFailed'));
-            const link = document.createElement('a');
-            link.href = value.url;
-            link.download = value.name || name;
-            link.rel = 'noopener';
-            document.body.append(link);
-            link.click();
-            link.remove();
-            $('status').className = 'status success';
-            $('status').textContent = t('row.downloadStarted', { name: value.name || name });
-          } catch (err) {
-            $('status').className = 'status';
-            $('status').textContent = err.message || t('row.downloadFailed');
-          } finally {
-            button.disabled = false;
-          }
+          if (rowMenuOwner === button) closeRowMenu();
+          else openRowMenu(button, actions());
         });
-        target.append(button);
+        return button;
       }
+      function closeRowMenu(refocus = false) {
+        if (rowMenu.hidden) return;
+        rowMenu.hidden = true;
+        rowMenu.replaceChildren();
+        const owner = rowMenuOwner;
+        rowMenuOwner = null;
+        if (owner) {
+          owner.setAttribute('aria-expanded', 'false');
+          if (refocus) owner.focus();
+        }
+      }
+      // at: pointer position for a right-click; otherwise the menu drops below the button.
+      function openRowMenu(button, items, at = null) {
+        closeRowMenu();
+        if (!items.length) return;
+        for (const item of items) {
+          if (item.separator) {
+            // No separator at the top (e.g. no Open or Download before Rename).
+            if (rowMenu.childElementCount) rowMenu.append(el('div', 'row-menu-sep'));
+            continue;
+          }
+          const entry = el(item.href ? 'a' : 'button', item.danger ? 'row-menu-item danger' : 'row-menu-item');
+          entry.setAttribute('role', 'menuitem');
+          entry.innerHTML = `<svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">${ACTION_ICONS[item.icon]}</svg>`;
+          entry.append(el('span', '', item.label));
+          if (item.title) entry.title = item.title;
+          if (item.href) {
+            entry.href = item.href;
+            entry.target = '_blank';
+            entry.rel = 'noopener noreferrer';
+          } else {
+            entry.type = 'button';
+            entry.disabled = Boolean(item.disabled);
+          }
+          entry.addEventListener('click', event => {
+            event.stopPropagation();
+            closeRowMenu();
+            // Links open by themselves; buttons run their action.
+            if (item.run) {
+              event.preventDefault();
+              item.run(button);
+            }
+          });
+          rowMenu.append(entry);
+        }
+        rowMenuOwner = button;
+        button.setAttribute('aria-expanded', 'true');
+        rowMenu.hidden = false;
+        // Place it, then keep it inside the window: flip above when there's no room below.
+        const width = rowMenu.offsetWidth;
+        const height = rowMenu.offsetHeight;
+        const box = button.getBoundingClientRect();
+        let x = at ? at.x : box.right - width;
+        let y = at ? at.y : box.bottom + 4;
+        if (y + height > innerHeight - 8) y = (at ? at.y : box.top - 4) - height;
+        rowMenu.style.left = `${Math.max(8, Math.min(x, innerWidth - width - 8))}px`;
+        rowMenu.style.top = `${Math.max(8, y)}px`;
+        const first = rowMenu.querySelector('.row-menu-item:not(:disabled)');
+        if (first) first.focus({ preventScroll: true });
+      }
+      // Close on a click elsewhere, scrolling or resizing. The owner button handles its own click (toggle).
+      document.addEventListener('mousedown', event => {
+        if (rowMenu.hidden || rowMenu.contains(event.target) || (rowMenuOwner && rowMenuOwner.contains(event.target))) return;
+        closeRowMenu();
+      });
+      addEventListener('scroll', () => closeRowMenu(), true);
+      addEventListener('resize', () => closeRowMenu());
+      // Keys while open: Esc closes (and doesn't also close search), arrows move, Tab leaves.
+      // Capture phase, so this runs before the search box's own Esc handling.
+      document.addEventListener('keydown', event => {
+        if (rowMenu.hidden) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          closeRowMenu(true);
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const entries = [...rowMenu.querySelectorAll('.row-menu-item:not(:disabled)')];
+          if (!entries.length) return;
+          const step = event.key === 'ArrowDown' ? 1 : -1;
+          const index = entries.indexOf(document.activeElement);
+          entries[(index + step + entries.length) % entries.length].focus();
+        } else if (event.key === 'Tab') {
+          closeRowMenu();
+        }
+      }, true);
 
       // ---- Search (all libraries) ----
       // Enter in the search box asks the app for one block of results from SharePoint's search
@@ -3090,7 +3487,7 @@
           foot.append(button);
         }
       }
-      // One result row: name, location, size, date, then Show in tree and Open.
+      // One result row: name, location, size, date, then the "⋯" menu (Show in tree, Download, Open).
       function createSearchRow(result) {
         const library = libraryForResult(result);
         const row = el('div', 'row search-row');
@@ -3105,26 +3502,30 @@
         where.title = location;
         // Folders have no size in the search index (sizeBytes null).
         const size = el('span', 'size', result.sizeBytes == null ? '—' : fmtBytes(numberValue(result.sizeBytes)));
-        const modifiedDate = result.lastModified ? new Date(result.lastModified) : null;
-        const modified = el('span', 'count', modifiedDate && !Number.isNaN(modifiedDate.getTime())
-          ? modifiedDate.toLocaleDateString(lang === 'ko' ? 'ko-KR' : undefined, { dateStyle: 'medium' }) : '');
+        const modified = el('span', 'count', fmtDate(result.lastModified));
         if (result.lastModified) modified.title = fmtWhen(result.lastModified);
+        // Actions: the same "⋯" menu as the tree (also on right-click).
         const actions = el('span', 'row-actions');
-        const reveal = el('button', 'item-action');
-        reveal.type = 'button';
-        setActionIcon(reveal, 'reveal', library ? t('search.reveal') : t('search.notInTree'), t('search.revealTitle', { name: result.name }));
-        reveal.disabled = !library;
-        reveal.addEventListener('click', () => void revealInTree(result));
-        const open = document.createElement('a');
-        open.className = 'open-link';
-        // Built from the path, segment by segment: the raw webUrl can hold unencoded "#" or spaces.
-        open.href = buildFolderUrl(result.webUrl, result.itemPath);
-        open.target = '_blank';
-        open.rel = 'noopener noreferrer';
-        setActionIcon(open, 'open', t('row.openTitle'), t('row.openTitle'));
-        actions.append(reveal);
-        if (!result.isFolder && result.inSiteList) addDownloadButton(actions, result.siteUrl, result.itemPath, result.name);
-        actions.append(open);
+        const resultActions = () => {
+          const items = [{
+            icon: 'reveal', label: t('search.reveal'), disabled: !library,
+            // A greyed item says why: the item's library isn't in the tree.
+            title: library ? t('search.revealTitle', { name: result.name }) : t('search.notInTree'),
+            run: () => void revealInTree(result)
+          }];
+          if (!result.isFolder && result.inSiteList) {
+            items.push({ icon: 'download', label: t('row.download'), run: button => void downloadItem(result.siteUrl, result.itemPath, result.name, button) });
+          }
+          // Built from the path, segment by segment: the raw webUrl can hold unencoded "#" or spaces.
+          items.push({ icon: 'open', label: t('row.openTitle'), href: buildFolderUrl(result.webUrl, result.itemPath) });
+          return items;
+        };
+        const menuButton = rowMenuButton(result.name, resultActions);
+        actions.append(menuButton);
+        row.addEventListener('contextmenu', event => {
+          event.preventDefault();
+          openRowMenu(menuButton, resultActions(), { x: event.clientX, y: event.clientY });
+        });
         row.append(nameCell, where, size, modified, actions);
         return row;
       }

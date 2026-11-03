@@ -199,6 +199,9 @@ class FakeTenant:
     def graph_patches(self) -> list[dict]:
         return [call for call in self.graph_calls if call["method"] == "PATCH"]
 
+    def graph_deletes(self) -> list[dict]:
+        return [call for call in self.graph_calls if call["method"] == "DELETE"]
+
     def sp_named(self, name: str) -> list[dict]:
         return [call for call in self.sp_calls if call["path"].endswith(name)]
 
@@ -260,6 +263,8 @@ class FakeGraph(nav.GraphClient):
                 return TENANT.to_json(item)
             if method == "PATCH":
                 return self._patch(item, json_body or {}, headers or {})
+            if method == "DELETE":
+                return self._delete(item, headers or {})
         raise graph_error(400, f"No fake for {method} {route}")
 
     @staticmethod
@@ -275,6 +280,19 @@ class FakeGraph(nav.GraphClient):
         item["parent"], item["name"] = new_parent, new_name
         TENANT.touch(item)
         return TENANT.to_json(item)
+
+
+    @staticmethod
+    def _delete(item: dict, headers: dict) -> dict:
+        """Delete an item and everything under it (Graph: to the recycle bin), refusing a stale If-Match (412)."""
+        if "If-Match" in headers and headers["If-Match"] != TENANT.to_json(item)["eTag"]:
+            raise graph_error(412, "ETag does not match the current item.")
+        doomed = [item["id"]]
+        for item_id in doomed:                      # grows while walking: breadth-first over the subtree
+            doomed.extend(child["id"] for child in TENANT.children(item_id))
+        for item_id in doomed:
+            del TENANT.items[item_id]
+        return {}
 
 
 class FakeSharePoint(nav.SharePointRestClient):
@@ -337,6 +355,8 @@ class ServiceTest(unittest.TestCase):
         nav.webbrowser = types.SimpleNamespace(open=lambda url: None)
         nav.time = types.SimpleNamespace(sleep=lambda seconds: None, time=time.time)
         os.environ["SHAREPOINT_NAVIGATOR_AUTO_STOP"] = "0"
+        # Delete's required wait between preview and confirmation, shortened (see DeleteTests.WAIT).
+        os.environ["SHAREPOINT_NAVIGATOR_DELETE_WAIT"] = "0.05"
         # The service prints to the terminal; keep that in a buffer the tests can read.
         cls.log = io.StringIO()
         cls.real_stdout, sys.stdout = sys.stdout, cls.log
@@ -712,6 +732,125 @@ class SearchTests(ServiceTest):
     def test_too_deep_paging_is_refused(self):
         self.refused("/api/search", {"query": "x", "from": nav.SEARCH_MAX_FROM}, "Only the first")
 
+
+
+# ---- Delete (preview, then delete to the recycle bin) ----
+
+class DeleteTests(ServiceTest):
+    REPORT = f"{DOCS}/Folder A/Report.docx"
+    FOLDER = f"{DOCS}/Folder A"
+    WAIT = 0.08                                     # just over the service's shortened wait (0.05 s)
+
+    def preview(self, item_path=REPORT, item_type="file", site=ALPHA):
+        status, result = self.call("/api/delete-inspect", {"siteUrl": site, "itemPath": item_path, "itemType": item_type})
+        self.assertEqual(status, 200, result)
+        return result
+
+    def confirm(self, preview, wait=True, **overrides):
+        """Send the confirmation the page would send after the countdown, with optional changes."""
+        if wait:
+            time.sleep(self.WAIT)
+        body = {"deleteId": preview["deleteId"], "confirmName": preview["name"],
+                "confirmFileCount": preview["fileCount"], "acknowledge": "delete-to-recycle-bin", **overrides}
+        return self.call("/api/delete", body)
+
+    def assert_nothing_deleted(self):
+        self.assertEqual(TENANT.graph_deletes(), [])
+        self.assertNotIn("Deleted", self.new_log())
+
+    def test_preview_changes_nothing(self):
+        preview = self.preview(self.FOLDER, "folder")
+        self.assertEqual((preview["sizeBytes"], preview["fileCount"]), (150, 2))
+        self.assertEqual(TENANT.graph_deletes() + TENANT.graph_patches(), [])
+
+    def test_file_delete_sends_the_previewed_etag(self):
+        item = TENANT.by_path(self.REPORT)
+        etag = TENANT.to_json(item)["eTag"]
+        status, result = self.confirm(self.preview())
+        self.assertEqual(status, 200, result)
+        self.assertIsNone(TENANT.by_path(self.REPORT))
+        self.assertEqual(TENANT.graph_deletes()[0]["headers"].get("If-Match"), etag)
+        self.assertIn("Deleted (to the recycle bin) file", self.new_log())
+
+    def test_folder_delete_removes_its_contents(self):
+        status, result = self.confirm(self.preview(self.FOLDER, "folder"))
+        self.assertEqual(status, 200, result)
+        self.assertIsNone(TENANT.by_path(self.FOLDER))
+        self.assertIsNotNone(TENANT.by_path(f"{DOCS}/Folder B/Report.docx"))   # the neighbour is untouched
+
+    def test_library_root_is_refused(self):
+        self.refused("/api/delete-inspect", {"siteUrl": ALPHA, "itemPath": DOCS, "itemType": "folder"}, "whole library")
+
+    def test_site_outside_the_list_is_refused(self):
+        self.refused("/api/delete-inspect", {"siteUrl": f"https://{HOST}/sites/Gamma",
+                                             "itemPath": "/sites/Gamma/Shared Documents/x", "itemType": "file"},
+                     "not in this tenant's loaded site list")
+
+    def test_wrong_item_type_is_refused(self):
+        self.refused("/api/delete-inspect", {"siteUrl": ALPHA, "itemPath": self.REPORT, "itemType": "folder"}, "changed type")
+
+    def test_too_quick_a_confirmation_is_refused_and_used_up(self):
+        preview = self.preview()
+        status, result = self.confirm(preview, wait=False)
+        self.assertEqual(status, 400)
+        self.assertIn("too quickly", result["error"])
+        # The preview is gone even though nothing happened: the person must start again.
+        status, result = self.confirm(preview)
+        self.assertIn("already used", result["error"])
+        self.assert_nothing_deleted()
+
+    def test_name_must_match_exactly(self):
+        for typed in ("report.docx", "Report.docx ", "", "Report"):
+            status, result = self.confirm(self.preview(), confirmName=typed)
+            self.assertEqual(status, 400)
+            self.assertIn("typed name", result["error"])
+        self.assert_nothing_deleted()
+
+    def test_folder_file_count_must_match(self):
+        status, result = self.confirm(self.preview(self.FOLDER, "folder"), confirmFileCount="3")
+        self.assertIn("file count", result["error"])
+        status, result = self.confirm(self.preview(self.FOLDER, "folder"), confirmFileCount=None)
+        self.assertIn("file count", result["error"])
+        self.assert_nothing_deleted()
+
+    def test_acknowledgement_is_required(self):
+        status, result = self.confirm(self.preview(), acknowledge="yes")
+        self.assertIn("acknowledged", result["error"])
+        self.assert_nothing_deleted()
+
+    def test_preview_is_single_use(self):
+        preview = self.preview()
+        self.assertEqual(self.confirm(preview)[0], 200)
+        status, result = self.confirm(preview)
+        self.assertIn("already used", result["error"])
+        self.assertEqual(len(TENANT.graph_deletes()), 1)
+
+    def test_item_changed_after_preview_is_refused(self):
+        preview = self.preview()
+        TENANT.touch(TENANT.by_path(self.REPORT))
+        status, result = self.confirm(preview)
+        self.assertIn("changed after the preview", result["error"])
+        self.assert_nothing_deleted()
+
+    def test_file_added_to_folder_after_preview_is_refused(self):
+        preview = self.preview(self.FOLDER, "folder")
+        TENANT.add("drive-docs", TENANT.by_path(f"{self.FOLDER}/Inner")["id"], "New.txt", size=1)
+        status, result = self.confirm(preview, confirmFileCount=2)
+        self.assertIn("changed after the preview", result["error"])
+        self.assert_nothing_deleted()
+
+    def test_unknown_preview_is_refused(self):
+        self.refused("/api/delete", {"deleteId": "nope", "confirmName": "Report.docx",
+                                     "acknowledge": "delete-to-recycle-bin"}, "expired or was already used")
+        self.assert_nothing_deleted()
+
+    def test_rename_preview_cannot_be_used_to_delete(self):
+        _, rename = self.call("/api/inspect", {"siteUrl": ALPHA, "itemPath": self.REPORT,
+                                               "itemType": "file", "newName": "Summary.docx"})
+        time.sleep(self.WAIT)
+        self.refused("/api/delete", {"deleteId": rename["inspectionId"], "confirmName": "Report.docx",
+                                     "acknowledge": "delete-to-recycle-bin"}, "expired or was already used")
+        self.assert_nothing_deleted()
 
 
 # ---- Download ----

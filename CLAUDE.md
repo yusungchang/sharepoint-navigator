@@ -1,6 +1,6 @@
 # SharePoint Navigator
 
-A local browser app that lets a Microsoft 365 admin browse every site's Documents library, see used storage (current files vs. version history), search across sites, rename, copy or move files and folders, and trim old versions. Public repo: github.com/yusungchang/sharepoint-navigator (MIT), product page in `site/` (GitHub Pages). Claude Code maintains it. History and reasoning: docs/HISTORY.md. Owner-only notes (tenant, private files) are in `CLAUDE.local.md`, which git ignores.
+A local browser app that lets a Microsoft 365 admin browse every site's Documents library, see used storage (current files vs. version history), search across sites, rename, copy, move or delete files and folders, and trim old versions. Public repo: github.com/yusungchang/sharepoint-navigator (MIT), product page in `site/` (GitHub Pages). Claude Code maintains it. History and reasoning: docs/HISTORY.md. Owner-only notes (tenant, private files) are in `CLAUDE.local.md`, which git ignores.
 
 ## Files
 - `sharepoint-navigator.py`: the local service on 127.0.0.1:8765. It handles MSAL device-code sign-in, Graph (`GraphClient`), SharePoint REST (`SharePointRestClient`) and the API routes.
@@ -15,7 +15,7 @@ A local browser app that lets a Microsoft 365 admin browse every site's Document
 - Tenant and client ID: `<tenant>_clientid.txt` beside the app (beside the .app on macOS) wins; else `~/.sharepoint-navigator/settings.json`; else the page's setup screen asks and saves. Never print, copy or commit a client ID; `*_clientid.txt` is git-ignored.
 
 ## Architecture
-- Graph handles site and library lookups, a folder's *direct* children (200 per page), rename/copy/move, and search (`/api/search` → `POST /search/query`, driveItem hits across all sites, read-only; results offer only Show in tree and Open).
+- Graph handles site and library lookups, a folder's *direct* children (200 per page), rename/copy/move, delete (to the recycle bin), and search (`/api/search` → `POST /search/query`, driveItem hits across all sites, read-only; results offer only Show in tree and Open).
 - SharePoint REST, using tokens obtained silently from the same MSAL sign-in, handles:
   - The site list: admin API `GetSitePropertiesFromSharePointByFilters`, falling back to Graph search.
   - Folder `StorageMetrics`. A single `/Folders?$expand=StorageMetrics` call returns metrics for all subfolders.
@@ -27,14 +27,15 @@ A local browser app that lets a Microsoft 365 admin browse every site's Document
 - Size bars use one global scale: the largest library is 100% at every depth, so bars are never relative to siblings. Only the name column is indented, so the bar, size, files and action columns line up at every depth.
 - Wording in the UI is plain language: say "libraries" and "app", not Graph, scan, report, PnP or PowerShell.
 - The UI is bilingual (EN | 한국어) and has a theme switch (Light | Dark | System), with both choices kept in localStorage. Every new UI string goes into both `I18N.en` and `I18N.ko` in sharepoint-navigator.html and is shown with `t('key')`, or with `data-i18n` for fixed markup. Dark colours live in two copies of the same rules: the system-dark media query and `:root[data-theme="dark"]`. Change both together.
-- Opening a folder fetches only its direct children. Never scan recursively for the UI (`Inventory.stats` is only for the rename snapshot).
+- Opening a folder fetches only its direct children. Never scan recursively for the UI (`Inventory.stats` is only for the rename and delete snapshots).
 - Sizes load for visible rows and never block opening a folder. No Expand all; nothing starts expanded.
 - A 403 or other error on one site is skipped, and the scan continues.
 - Bind to 127.0.0.1 only; no shell or arbitrary command routes.
 - Copy and Move stay within the item's own library; no transfers between sites (owner's rule). The picker has no library selector.
+- Delete must keep asking a lot (owner's rule): live preview, tick-boxes, the exact name typed, a folder's file count typed, a countdown (`DELETE_WAIT_SECONDS`, enforced by the service too) and a last browser confirm; the service re-checks everything and sends If-Match. Delete is only in the tree's row menu, never in search results, and never for a library root.
 - Search results offer only Show in tree and Open; everything else is done from the tree row (owner's choice).
 - The repo is public: no tenant, customer, staff or site names in code, docs, tests, commits or screenshots. Use contoso / made-up names (screenshots come from tools/demo.py).
-- Never run a real rename, copy, move or version trim in the tenant unless the user asks for it directly.
+- Never run a real rename, copy, move, delete or version trim in the tenant unless the user asks for it directly.
 
 ## Versioning ("vibe" scheme)
 - `x.y.z`, set only in `__version__` in sharepoint-navigator.py; the page, terminal, `--version` and `--self-check` show it.
@@ -48,5 +49,5 @@ A local browser app that lets a Microsoft 365 admin browse every site's Document
 - Quick check without sign-in: `python sharepoint-navigator.py --self-check`.
 - Live read-only check: run on a spare port without opening a browser, e.g. `BROWSER=true SHAREPOINT_NAVIGATOR_PORT=8799 .venv/bin/python -u sharepoint-navigator.py <tenant>` (the tenant is in CLAUDE.local.md). Read the token from `GET /`, then call `/api/status`, `/api/scan`, `/api/folder-children` and `/api/storage-metric`, and stop via `/api/stop`. The app writes no files during a scan.
 - JS syntax: extract the inline `<script>` and run `node --check`.
-- Offline tests: `.venv/bin/python -m unittest tests/test_service.py` (about 2 s, no sign-in, nothing sent to the tenant). They run the real service with Graph and SharePoint REST faked in memory and cover the safety rules of rename, copy, move and trim plus access checks. Run them after every service change; when the service starts a new kind of Graph or REST call, extend the fakes in the same file.
+- Offline tests: `.venv/bin/python -m unittest tests/test_service.py` (a few seconds, no sign-in, nothing sent to the tenant). They run the real service with Graph and SharePoint REST faked in memory and cover the safety rules of rename, copy, move, delete and trim plus access checks. Run them after every service change; when the service starts a new kind of Graph or REST call, extend the fakes in the same file.
 - Git repo at ~/Projects/sharepoint-navigator (not in iCloud). Commit in small steps; never commit private files.

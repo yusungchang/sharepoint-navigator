@@ -3,8 +3,8 @@
 
 A small local web service for a Microsoft 365 / SharePoint admin. It serves one page
 (sharepoint-navigator.html) to the default browser for browsing the Documents libraries of every
-site in the tenant, seeing how much storage each library and folder uses, renaming, copying
-or moving files and folders, and trimming a site's old file versions. No PowerShell is required.
+site in the tenant, seeing how much storage each library and folder uses, renaming, copying,
+moving or deleting files and folders, and trimming a site's old file versions. No PowerShell is required.
 
 Why two APIs: Graph resolves sites and libraries, lists folders and does rename/copy/move, but
 its folder ``size`` is current content only and its delegated getAllSites is blocked. SharePoint
@@ -18,6 +18,10 @@ REST, using the same sign-in, fills both gaps:
   ProgressForDeleteFileVersions and CancelDeleteFileVersions, the calls behind the SharePoint Online
   PowerShell trim cmdlets. Starting or stopping one uses an AllSites.FullControl token.
   /api/trim-queue reads every site's trim and version-policy job (GetProgressForSetVersionPolicyForDocLibs).
+
+Delete: /api/delete-inspect takes a live snapshot (folders counted fully) under a single-use id;
+/api/delete then needs the item's exact name, a folder's file count, a short wait, and an unchanged
+item before Graph DELETE (If-Match) moves it to the site's recycle bin. Library roots are refused.
 
 Download: /api/download-link returns Graph's short-lived @microsoft.graph.downloadUrl for one file.
 
@@ -54,6 +58,7 @@ import secrets
 import sys
 import threading
 import time
+import unicodedata
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -70,7 +75,7 @@ from msal_extensions import PersistedTokenCache, build_encrypted_persistence
 
 # App version, "vibe" scheme x.y.z: each working session raises z; a meaningful change raises y
 # and resets z. The only place it is set; every change is recorded in docs/HISTORY.md.
-__version__ = "0.6.1"
+__version__ = "0.8.0"
 
 # User files (client ID) live in APP_ROOT; bundled files (the HTML page) in RESOURCE_ROOT.
 FROZEN = bool(getattr(sys, "frozen", False))
@@ -92,7 +97,7 @@ APP_ROOT = _app_root()
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
 PAGE_FILE = "sharepoint-navigator.html"
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
-# Delegated Graph scopes. ReadWrite is needed for rename, copy and move.
+# Delegated Graph scopes. ReadWrite is needed for rename, copy, move and delete.
 SCOPES = ["Sites.Read.All", "Sites.ReadWrite.All"]
 # Extra (non-default) libraries are included only when they carry one of these names.
 LIBRARY_NAMES = {"documents", "shared documents"}
@@ -106,6 +111,12 @@ USER_AGENT = f"NONISV|SharePointNavigator|SharePointNavigator/{__version__}"
 AUTO_STOP_GRACE_SECONDS = 15
 # How often the session-events stream writes a keep-alive line; a failed write reveals a closed tab.
 SESSION_PING_SECONDS = 5
+# Delete: the confirmation is refused if it comes sooner than this after the preview, so the page's
+# countdown can't be skipped by a quick script or a double click. SHAREPOINT_NAVIGATOR_DELETE_WAIT
+# overrides it (the offline tests shorten it).
+DELETE_WAIT_SECONDS = 5
+# Delete: how long a delete preview stays valid.
+DELETE_PREVIEW_MINUTES = 3
 # Characters SharePoint does not allow in file or folder names.
 NAME_BAD_CHARS = set('\\/:*?"<>|')
 # Per-user folder: the encrypted sign-in cache and settings.json (tenant name and client ID per tenant).
@@ -1275,6 +1286,13 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
     # Rename previews awaiting confirmation, keyed by inspection id (see /api/inspect).
     pending: dict[str, dict] = {}
     pending_lock = threading.Lock()
+    # Delete previews awaiting confirmation, keyed by id (see /api/delete-inspect). Kept apart from
+    # rename previews so one can never be used as the other. Guarded by pending_lock too.
+    pending_deletes: dict[str, dict] = {}
+    try:
+        delete_wait = max(0.0, float(os.environ.get("SHAREPOINT_NAVIGATOR_DELETE_WAIT", DELETE_WAIT_SECONDS)))
+    except ValueError:
+        delete_wait = float(DELETE_WAIT_SECONDS)
     # Storage Metrics per folder, keyed "<site url lower>|<site-relative path casefolded>".
     storage_metric_cache: dict[str, dict] = {}
     storage_metric_lock = threading.Lock()
@@ -1599,7 +1617,7 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
         def log_request(self, code="-", size="-"):
             """Print a request line only when it failed; successful requests stay quiet.
 
-            Changes (copy, move, rename, trim) print their own plain line instead, and failed size
+            Changes (copy, move, rename, delete, trim) print their own plain line instead, and failed size
             and folder lookups print their own details, so their request lines are skipped too.
             """
             try:
@@ -2084,6 +2102,100 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
                     new_path = before["path"].rsplit("/", 1)[0] + "/" + inspection["newName"]
                     print(f"Renamed {before['path']} to {inspection['newName']} ({before['siteUrl']}).", flush=True)
                     self.send_json(200, {"ok": True, "newName": inspection["newName"], "newPath": new_path, "itemType": before["itemType"]})
+                    return
+                # -- /api/delete-inspect: delete step 1. Take a live snapshot of the item (a folder is
+                # counted all the way down) and hold it under a single-use id. Changes nothing.
+                if self.path == "/api/delete-inspect":
+                    site_url = normalize_site_url(str(payload.get("siteUrl") or ""))
+                    item_path = str(payload.get("itemPath") or "")
+                    item_type = str(payload.get("itemType") or "").lower()
+                    if site_url.lower() not in allowed_sites:
+                        raise NavigatorError("The selected site is not in this tenant's loaded site list.")
+                    if not item_path or item_type not in ("folder", "file"):
+                        raise NavigatorError("The selected item is missing details. Select Reload libraries and try again.")
+                    # A library's own root is never deleted from here; only files and folders inside one.
+                    _, relative = inventory.drive_for_item(site_url, item_path)
+                    if not relative:
+                        raise NavigatorError("A whole library can't be deleted from this app. Nothing was changed.")
+                    snapshot = inventory.snapshot(site_url, item_path)
+                    if snapshot["itemType"] != item_type:
+                        raise NavigatorError("The item changed type since it was shown. Reopen its folder and try again.")
+                    # Same check as rename: tell the page if what it showed is out of date.
+                    expected_modified = str(payload.get("expectedModified") or "")
+                    expected_size_raw = payload.get("expectedSizeBytes")
+                    expected_count_raw = payload.get("expectedFileCount")
+                    changed = bool(
+                        (expected_modified and snapshot["modified"] and expected_modified != snapshot["modified"])
+                        or (expected_size_raw is not None and int(expected_size_raw) != snapshot["sizeBytes"])
+                        or (item_type == "folder" and expected_count_raw is not None
+                            and int(expected_count_raw) != snapshot["fileCount"])
+                    )
+                    delete_id = secrets.token_hex(16)
+                    now = datetime.now(timezone.utc)
+                    with pending_lock:
+                        pending_deletes[delete_id] = {
+                            "snapshot": snapshot,
+                            "notBefore": now + timedelta(seconds=delete_wait),
+                            "expires": now + timedelta(minutes=DELETE_PREVIEW_MINUTES),
+                        }
+                    self.send_json(200, {
+                        "ok": True, "deleteId": delete_id, "itemType": item_type, "siteUrl": snapshot["siteUrl"],
+                        "name": snapshot["name"], "path": snapshot["path"], "modified": snapshot["modified"],
+                        "sizeBytes": snapshot["sizeBytes"], "fileCount": snapshot["fileCount"],
+                        "changedSinceReport": changed, "waitSeconds": delete_wait,
+                        "expiresMinutes": DELETE_PREVIEW_MINUTES,
+                    })
+                    return
+                # -- /api/delete: delete step 2. Every check must pass, or nothing is deleted.
+                if self.path == "/api/delete":
+                    delete_id = str(payload.get("deleteId") or "")
+                    # pop() makes each preview single-use: any refusal below means starting over.
+                    with pending_lock:
+                        pending_delete = pending_deletes.pop(delete_id, None)
+                    if not pending_delete:
+                        raise NavigatorError("The delete preview expired or was already used. Nothing was deleted; start again.")
+                    now = datetime.now(timezone.utc)
+                    if now > pending_delete["expires"]:
+                        raise NavigatorError("The delete preview expired. Nothing was deleted; start again.")
+                    if now < pending_delete["notBefore"]:
+                        raise NavigatorError("The delete was confirmed too quickly after the preview. Nothing was deleted; start again.")
+                    before = pending_delete["snapshot"]
+                    # The page must send back what the person typed: the exact name (case matters)
+                    # and, for a folder, how many files it holds, plus the fixed acknowledgement.
+                    if payload.get("acknowledge") != "delete-to-recycle-bin":
+                        raise NavigatorError("The delete wasn't acknowledged. Nothing was deleted.")
+                    # NFC on both sides: names uploaded from a Mac can be stored decomposed (common for
+                    # Korean), which looks the same but can't be typed back. Case and spaces still count.
+                    typed_name = unicodedata.normalize("NFC", str(payload.get("confirmName") or ""))
+                    if typed_name != unicodedata.normalize("NFC", before["name"]):
+                        raise NavigatorError("The typed name doesn't match the item's name exactly. Nothing was deleted.")
+                    if before["itemType"] == "folder":
+                        try:
+                            typed_count = int(str(payload.get("confirmFileCount")).replace(",", "").strip())
+                        except (TypeError, ValueError):
+                            typed_count = -1
+                        if typed_count != before["fileCount"]:
+                            raise NavigatorError("The typed file count doesn't match the folder. Nothing was deleted.")
+                    # Re-snapshot by id (a folder is walked again) and require every tracked field to be unchanged.
+                    current = inventory.snapshot_by_id(before)
+                    for field in ("itemId", "path", "name", "modified", "sizeBytes", "fileCount", "etag", "ctag"):
+                        if current.get(field) != before.get(field):
+                            raise NavigatorError("The item changed after the preview. Nothing was deleted; check it again.")
+                    # If-Match with the previewed eTag: Graph refuses (412) if the item changed in between.
+                    # Graph's DELETE moves the item to the site's recycle bin; it is not a permanent delete.
+                    graph.request(
+                        "DELETE",
+                        f"/drives/{quote(before['driveId'], safe='')}/items/{quote(before['itemId'], safe='')}",
+                        headers={"If-Match": before["etag"]} if before.get("etag") else None,
+                    )
+                    # Sizes and listings above the item changed.
+                    with storage_metric_lock:
+                        storage_metric_cache.clear()
+                    with folder_children_lock:
+                        folder_children_cache.clear()
+                    contents = f", {before['fileCount']} files inside" if before["itemType"] == "folder" else ""
+                    print(f"Deleted (to the recycle bin) {before['itemType']} {before['path']}{contents} ({before['siteUrl']}).", flush=True)
+                    self.send_json(200, {"ok": True, "name": before["name"], "path": before["path"], "itemType": before["itemType"]})
                     return
                 self.send_json(404, {"ok": False, "error": "Not found."})
             except Exception as exc:
