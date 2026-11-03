@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.0.0 | 2026-11-03 | Version 1.0, set by the owner. The same app as 0.8.0 (row menu, file dates, Delete with many confirmations), released as the first 1.x. 72 offline tests. |
 | 0.8.0 | 2026-11-03 | Delete for files and folders (to the site's recycle bin), behind many confirmations: live preview, tick-boxes, typed name and file count, a countdown and a last question; the service re-checks it all. 72 offline tests. |
 | 0.7.0 | 2026-11-03 | Row actions move into one "⋯" menu per row (also on right-click), freeing the wide actions column. Files show their last-modified date under the size. 57 offline tests. |
 | 0.6.1 | 2026-11-02 | Fix: Download did nothing. Graph left out the download address because the request used `$select`; it now uses `select`. Failed downloads are logged with their reason. 57 offline tests. |
@@ -31,6 +32,13 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.0.0, 3 November 2026
+
+**Version 1.0.** The owner set the version to 1.0.0 and asked for a release. Nothing in the app changed from
+0.8.0; this release is the first to carry 0.7.0 (row menu, file dates) and 0.8.0 (Delete) to the downloads.
+From here the vibe scheme goes on from 1.0.0: each session raises z, a new feature raises y.
+Offline tests 72/72.
 
 ## 0.8.0, 3 November 2026
 

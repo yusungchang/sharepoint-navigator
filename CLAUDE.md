@@ -39,7 +39,7 @@ A local browser app that lets a Microsoft 365 admin browse every site's Document
 
 ## Versioning ("vibe" scheme)
 - `x.y.z`, set only in `__version__` in sharepoint-navigator.py; the page, terminal, `--version` and `--self-check` show it.
-- Each working session raises z by one; a meaningful change (new feature) raises y instead and resets z to 0; x stays 0 until the owner says 1.0.
+- Each working session raises z by one; a meaningful change (new feature) raises y instead and resets z to 0; x became 1 when the owner set 1.0.0 (2026-11-03); it changes again only when the owner says so.
 - At the end of every session: run the offline tests (`.venv/bin/python -m unittest tests/test_service.py`, see below) and fix or report any failure, bump the version, add a row to the table in `docs/HISTORY.md` plus a section on what changed and why (including the test result), and update the README if behaviour changed. Commit; tag `vX.Y.Z` and push the tag to publish a release when the owner wants one. The owner asked for the tests every session, even when only the page changed.
 
 ## Running and checking
