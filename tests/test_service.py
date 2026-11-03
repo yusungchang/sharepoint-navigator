@@ -19,6 +19,8 @@ import json
 import os
 import re
 import socket
+import stat
+import tempfile
 import sys
 import threading
 import time
@@ -355,6 +357,9 @@ class ServiceTest(unittest.TestCase):
         nav.webbrowser = types.SimpleNamespace(open=lambda url: None)
         nav.time = types.SimpleNamespace(sleep=lambda seconds: None, time=time.time)
         os.environ["SHAREPOINT_NAVIGATOR_AUTO_STOP"] = "0"
+        # A throwaway user folder: the service writes its running file there, never in ~.
+        cls.user_temp = tempfile.TemporaryDirectory()
+        cls.saved_user_folder, nav.USER_FOLDER = nav.USER_FOLDER, Path(cls.user_temp.name)
         # Delete's required wait between preview and confirmation, shortened (see DeleteTests.WAIT).
         os.environ["SHAREPOINT_NAVIGATOR_DELETE_WAIT"] = "0.05"
         # The service prints to the terminal; keep that in a buffer the tests can read.
@@ -388,6 +393,8 @@ class ServiceTest(unittest.TestCase):
         cls.call("/api/stop", {})
         cls.thread.join(timeout=5)
         sys.stdout = cls.real_stdout
+        nav.USER_FOLDER = cls.saved_user_folder
+        cls.user_temp.cleanup()
 
     def setUp(self):
         TENANT.reset()
@@ -439,6 +446,12 @@ class AccessTests(ServiceTest):
     def test_unknown_route_is_404(self):
         status, _ = self.call("/api/run-shell", {})
         self.assertEqual(status, 404)
+
+    def test_running_file_is_private_and_holds_the_key(self):
+        marker = nav.running_file(self.port)
+        self.assertEqual(stat.S_IMODE(marker.stat().st_mode), 0o600)
+        info = json.loads(marker.read_text())
+        self.assertEqual((info["version"], info["port"], info["token"]), (nav.__version__, self.port, self.token))
 
 
 # ---- Rename (inspect, then rename) ----
@@ -1022,6 +1035,121 @@ class ConnectTests(TempSettings, unittest.TestCase):
         DeviceCodeAuth.entered.set()                       # the old sign-in finishing changes nothing
         time.sleep(0.2)
         self.assertEqual(self.call("/api/status")[1]["phase"], "setup")
+
+
+# ---- Second launch: open the page, or take over from an older copy ----
+
+class TakeOverTests(TempSettings, unittest.TestCase):
+    """take_over against a real copy of the service on a spare port. The running copy is this same
+    code, so "older" and "newer" are made by changing what this copy thinks its own version is."""
+
+    def setUp(self):
+        self.use_temp_settings()
+        self.opened, self.notices = [], []
+        self.saved = (nav.webbrowser, nav.show_notice, nav.time, nav.__version__, nav.AuthSession)
+        nav.webbrowser = types.SimpleNamespace(open=self.opened.append)
+        nav.show_notice = self.notices.append
+        nav.time = time                       # the wait for the old copy needs a real sleep
+        nav.AuthSession = FakeAuth
+        os.environ["SHAREPOINT_NAVIGATOR_AUTO_STOP"] = "0"
+        self.real_stdout, sys.stdout = sys.stdout, io.StringIO()
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            self.port = probe.getsockname()[1]
+        # open_browser=False: only take_over's own page openings are recorded.
+        self.thread = threading.Thread(target=nav.run_server, args=(self.port,), kwargs={"open_browser": False}, daemon=True)
+        self.thread.start()
+        for _ in range(100):
+            if nav.already_running(self.port) and nav.running_file(self.port).exists():
+                break
+            time.sleep(0.05)
+        self.running = nav.parse_version(nav.__version__)
+
+    def tearDown(self):
+        # Put back a running file a test changed, then stop the copy if it still runs.
+        if getattr(self, "saved_marker", None) is not None:
+            nav.running_file(self.port).write_text(self.saved_marker)
+        try:
+            info = json.loads(nav.running_file(self.port).read_text())
+            request = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/stop", data=b"{}", method="POST",
+                                             headers={"X-Local-Token": info["token"]})
+            urllib.request.urlopen(request, timeout=5).close()
+        except (OSError, ValueError, KeyError):
+            pass
+        self.thread.join(timeout=5)
+        sys.stdout = self.real_stdout
+        nav.webbrowser, nav.show_notice, nav.time, nav.__version__, nav.AuthSession = self.saved
+        nav.running_version = ORIGINAL_RUNNING_VERSION
+        self.restore_settings()
+
+    def pretend(self, version):
+        """From here on, this copy says it is ``version``; the running copy keeps its own.
+
+        Its page would show the new number too (same module), so its version is read as before."""
+        nav.__version__ = version
+        nav.running_version = lambda port, real=self.running: real
+
+    def test_version_is_read_from_the_page(self):
+        self.assertEqual(nav.running_version(self.port), self.running)
+
+    def test_same_version_opens_the_page(self):
+        self.assertFalse(nav.take_over(self.port))
+        self.assertEqual(self.opened, [f"http://127.0.0.1:{self.port}/"])
+        self.assertTrue(nav.already_running(self.port))
+
+    def test_newer_running_copy_is_kept(self):
+        self.pretend("0.0.1")
+        self.assertFalse(nav.take_over(self.port))
+        self.assertTrue(nav.already_running(self.port))
+        self.assertEqual(self.notices, [])
+
+    def test_older_copy_is_stopped_and_replaced(self):
+        self.pretend("99.0.0")
+        self.assertTrue(nav.take_over(self.port))
+        self.thread.join(timeout=5)
+        self.assertFalse(self.thread.is_alive())
+        self.assertFalse(nav.already_running(self.port))
+        self.assertFalse(nav.running_file(self.port).exists())   # the old copy cleaned up after itself
+        self.assertEqual((self.opened, self.notices), ([], []))
+
+    def test_copy_without_a_key_is_left_and_explained(self):
+        # Like a copy from before 1.2.0: no running file.
+        self.saved_marker = nav.running_file(self.port).read_text()
+        nav.running_file(self.port).unlink()
+        self.pretend("99.0.0")
+        self.assertFalse(nav.take_over(self.port))
+        self.assertTrue(nav.already_running(self.port))
+        self.assertEqual(self.opened, [f"http://127.0.0.1:{self.port}/"])
+        self.assertEqual(len(self.notices), 1)
+        self.assertIn("Stop app", self.notices[0])
+
+    def test_wrong_key_is_refused_and_explained(self):
+        marker = nav.running_file(self.port)
+        info = json.loads(marker.read_text())
+        self.saved_marker = json.dumps(info)
+        marker.write_text(json.dumps({**info, "token": "not-the-key"}))
+        self.pretend("99.0.0")
+        self.assertFalse(nav.take_over(self.port))
+        self.assertTrue(nav.already_running(self.port))
+        self.assertEqual(len(self.notices), 1)
+
+    def test_key_for_another_version_is_not_used(self):
+        # A stale file from a different copy must not be sent to whoever answers now.
+        marker = nav.running_file(self.port)
+        info = json.loads(marker.read_text())
+        self.saved_marker = json.dumps(info)
+        marker.write_text(json.dumps({**info, "version": "0.9.0"}))
+        self.pretend("99.0.0")
+        self.assertFalse(nav.take_over(self.port))
+        self.assertTrue(nav.already_running(self.port))
+
+    def test_version_parsing(self):
+        self.assertEqual(nav.parse_version("v1.2.3"), (1, 2, 3))
+        for bad in ("1.2", "1.2.3-beta", "", None, "__APP_VERSION__"):
+            self.assertIsNone(nav.parse_version(bad))
+
+
+ORIGINAL_RUNNING_VERSION = nav.running_version
 
 
 if __name__ == "__main__":

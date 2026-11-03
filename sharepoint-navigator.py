@@ -37,6 +37,11 @@ Sites.ReadWrite.All, plus SharePoint AllSites.Read and (for version trim) AllSit
 Update check: the page itself (not this service) asks api.github.com for the newest release's
 version number, only when the person clicks Check for updates.
 
+Second launch: if a copy already runs on the port, the same or a newer version just has its page
+opened; an older one is stopped with the key it keeps in ~/.sharepoint-navigator/running-<port>.json
+(this user only), and the new copy starts. Copies before 1.2.0 leave no key, so the person is told
+to click Stop app in the old page.
+
 Security: binds to 127.0.0.1 only. A random per-run token is injected into the page and required
 on every API call (X-Local-Token header, or the query string for EventSource); requests with any
 other Origin are refused.
@@ -78,7 +83,7 @@ from msal_extensions import PersistedTokenCache, build_encrypted_persistence
 
 # App version, "vibe" scheme x.y.z: each working session raises z; a meaningful change raises y
 # and resets z. The only place it is set; every change is recorded in docs/HISTORY.md.
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # User files (client ID) live in APP_ROOT; bundled files (the HTML page) in RESOURCE_ROOT.
 FROZEN = bool(getattr(sys, "frozen", False))
@@ -126,6 +131,15 @@ NAME_BAD_CHARS = set('\\/:*?"<>|')
 # It is outside the app and the project, so a shared copy or the public repo never holds them.
 USER_FOLDER = Path.home() / ".sharepoint-navigator"
 SETTINGS_FILE = USER_FOLDER / "settings.json"
+
+
+def running_file(port: int) -> Path:
+    """While a copy serves on ``port``, it keeps its version and stop key here (this user only).
+
+    A newer copy started later reads it to stop the older one and take over (see take_over).
+    One file per port, so the demo and tests on other ports never touch the real app's file.
+    """
+    return USER_FOLDER / f"running-{port}.json"
 # Where an admin's Entra app setup is explained (shown when the app asks for a client ID).
 SETUP_GUIDE_URL = "https://github.com/yusungchang/sharepoint-navigator#set-up-the-entra-app-once-per-organisation"
 # requests timeout as (connect seconds, read seconds).
@@ -2219,6 +2233,17 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server_holder["server"] = server
+    # The port is ours now: leave the version and stop key for a newer copy (see take_over).
+    # Created readable by this user only, like the settings file beside it; a failure here only
+    # means a newer copy will ask the person to stop this one by hand.
+    marker = running_file(port)
+    try:
+        USER_FOLDER.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump({"version": __version__, "port": port, "token": token, "pid": os.getpid()}, handle)
+    except OSError as exc:
+        print(f"Couldn't write {marker.name} ({exc}); a newer copy can't take over from this one.", flush=True)
     base_url = f"http://127.0.0.1:{port}/"
     # Known tenant and client ID: sign in right away; otherwise the page shows the setup screen.
     if tenant and client_id and not force_setup:
@@ -2237,6 +2262,13 @@ def run_server(port: int, tenant: str | None = None, client_id: str | None = Non
     finally:
         # Ends the keep-alive loops of any open event streams.
         stopping.set()
+        # Remove our file while the port is still held, so a copy waiting to take over can't
+        # write its own first and lose it here. Only our own file (same token) is removed.
+        try:
+            if json.loads(marker.read_text(encoding="utf-8")).get("token") == token:
+                marker.unlink()
+        except (OSError, ValueError):
+            pass
         server.server_close()
         print("SharePoint Navigator service stopped.")
 
@@ -2324,6 +2356,88 @@ def show_fatal(message: str) -> None:
         pass
 
 
+def show_notice(message: str) -> None:
+    """Tell the person something that isn't an error: the terminal if there is one, else a system dialog."""
+    print(message, flush=True)
+    if has_console():
+        return
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, "SharePoint Navigator", 0x40)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.run(["osascript", "-e", "on run argv", "-e",
+                            'display alert "SharePoint Navigator" message (item 1 of argv)',
+                            "-e", "end run", message], check=False, timeout=600)
+    except Exception:
+        pass
+
+
+def parse_version(value: str):
+    """Turn "1.2.3" (or "v1.2.3") into (1, 2, 3); anything else into None."""
+    match = re.fullmatch(r"v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})", str(value or "").strip())
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def running_version(port: int):
+    """The version of the copy serving on the port, read from its page (every version puts it
+    there), or None if it can't be read."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            page = response.read(400_000).decode("utf-8", "replace")
+    except Exception:
+        return None
+    match = re.search(r'id="appVersion"[^>]*>\s*v?([0-9.]+)\s*<', page)
+    return parse_version(match.group(1)) if match else None
+
+
+def take_over(port: int) -> bool:
+    """A copy already serves on the port. Return True if this copy should start in its place.
+
+    Same version, a newer one, or one whose version can't be read: open its page and stop here
+    (False). An older one is asked to stop with the key it left in running_file; once the port is
+    free, this copy starts (True). Versions before 1.2.0 leave no key, and a key that doesn't
+    work is the same case: open the old page and tell the person to click Stop app there.
+    """
+    import urllib.request
+    base_url = f"http://127.0.0.1:{port}/"
+    mine, theirs = parse_version(__version__), running_version(port)
+    if theirs is None or mine is None or theirs >= mine:
+        print(f"SharePoint Navigator is already running; opening {base_url}", flush=True)
+        webbrowser.open(base_url)
+        return False
+    old = ".".join(map(str, theirs))
+    stopped = False
+    try:
+        info = json.loads(running_file(port).read_text(encoding="utf-8"))
+        # The key must belong to the copy that answers: same port and the version it reports.
+        if info.get("port") == port and parse_version(info.get("version")) == theirs and info.get("token"):
+            print(f"SharePoint Navigator {old} is running; this is {__version__}. Stopping the older copy.", flush=True)
+            request = urllib.request.Request(base_url + "api/stop", data=b"{}", method="POST",
+                                             headers={"Content-Type": "application/json",
+                                                      "X-Local-Token": str(info["token"])})
+            with urllib.request.urlopen(request, timeout=5):
+                pass
+            # Wait until the old copy has let go of the port (it shuts down on its own thread).
+            for _ in range(60):
+                if not already_running(port):
+                    stopped = True
+                    break
+                time.sleep(0.25)
+    except (OSError, ValueError):
+        stopped = False
+    if stopped:
+        print(f"Stopped SharePoint Navigator {old}; starting {__version__}.", flush=True)
+        return True
+    # Couldn't stop it (it predates 1.2.0, or didn't answer): send the person to its page.
+    webbrowser.open(base_url)
+    show_notice(f"SharePoint Navigator {old} is still running, so this copy ({__version__}) can't start. "
+                "Click Stop app at the top of its page (now open in your browser), then open the app again.")
+    return False
+
+
 def already_running(port: int) -> bool:
     """True if this app already answers on the port (checked by its Server header)."""
     import urllib.request
@@ -2346,10 +2460,8 @@ def main():
         port = int(os.environ.get("SHAREPOINT_NAVIGATOR_PORT", "8765"))
     except ValueError as exc:
         raise NavigatorError("SHAREPOINT_NAVIGATOR_PORT must be a number.") from exc
-    # Opened again while running: just bring the page back.
-    if already_running(port):
-        print(f"SharePoint Navigator is already running; opening http://127.0.0.1:{port}/", flush=True)
-        webbrowser.open(f"http://127.0.0.1:{port}/")
+    # Opened again while running: bring that page back, or take over from an older version.
+    if already_running(port) and not take_over(port):
         return
     # Whatever isn't known yet (tenant, client ID) is asked on the page's setup screen.
     # --setup shows that screen even when both are known (e.g. to switch organisation).

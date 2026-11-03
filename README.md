@@ -53,7 +53,9 @@ plus a settings folder in your user folder.
 - **Install:** unzip and keep the app in a folder that stays: Applications on macOS (drag it to the Dock if you like),
   or e.g. `Documents\SharePoint Navigator` on Windows (Send to → Desktop for a shortcut).
 - **Update:** replace the app with the new one. The tenant, client ID and sign-in are kept. Each new version
-  shows the first-launch security step once more.
+  shows the first-launch security step once more. If the old version is still running, opening the new one
+  stops it and takes its place (from 1.2.0 on; with 1.1.0 or older running, the new one asks you to click
+  **Stop app** in the old page first).
 - **Uninstall:** delete the app, then the settings folder: `~/.sharepoint-navigator` on macOS,
   `%USERPROFILE%\.sharepoint-navigator` on Windows. On macOS also delete the **msal-extensions** entry in
   Keychain Access (the key that encrypts the sign-in).

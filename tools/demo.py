@@ -416,6 +416,9 @@ def main():
         # The demo never writes the real settings file.
         nav.save_settings = lambda tenant, client_id=None: None
         nav.load_settings = lambda: {"tenant": "contoso"}
+        # The running file (version and stop key) goes to the temporary folder too, never the
+        # real ~/.sharepoint-navigator: tools/shots.py ends the demo before it can clean up.
+        nav.USER_FOLDER = Path(page_dir)
         nav.run_server(port, "contoso", "00000000-0000-0000-0000-000000000000",
                        force_setup="--setup" in sys.argv, open_browser=False)
 

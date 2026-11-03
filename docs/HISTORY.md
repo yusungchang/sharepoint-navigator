@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.2.0 | 2026-11-03 | Opening a new version while an older one runs now stops the old copy and starts the new one (1.1.0 and older get a message to click Stop app instead). 81 offline tests. |
 | 1.1.0 | 2026-11-03 | Check for updates: a round arrow in the header asks GitHub for the newest version only when clicked, and offers the download page. The page and README now say GitHub is the one exception to "talks only to Microsoft". 72 offline tests. |
 | 1.0.1 | 2026-11-03 | The way back from search results is easier to find: Back to libraries stays at the top while scrolling and stands out; the browser's Back button and Esc anywhere also return to the tree. 72 offline tests. |
 | 1.0.0 | 2026-11-03 | Version 1.0, set by the owner. The same app as 0.8.0 (row menu, file dates, Delete with many confirmations), released as the first 1.x. 72 offline tests. |
@@ -34,6 +35,32 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.2.0, 3 November 2026
+
+**A new version takes over from an old one.** The owner asked whether installing a new version and opening
+it would replace one still running. It didn't: a second launch only saw that something answered on port 8765
+and opened that page, so the old version kept running. Now a launch that finds a copy running reads its version
+from its page (every version puts it there):
+
+- the same version, or a newer one: its page opens, as before (a newer copy always wins);
+- an older one: the new copy stops it and starts in its place. To be allowed to, each copy from 1.2.0 on keeps
+  its version and stop key in `~/.sharepoint-navigator/running-<port>.json`, created readable by this user
+  only (like the sign-in cache beside it) and removed when it stops, before it lets go of the port. The key is
+  used only if the file's port and version match the copy that answers;
+- an older one that can't be stopped (1.1.0 and earlier leave no key, or the key is refused): its page opens
+  and a message says to click Stop app there, then open the app again. In a terminal the message is printed;
+  the installed app shows a system dialog.
+
+One file per port keeps other copies off the real app's file, and the offline tests and the demo now use a
+temporary user folder (a screenshot run had left a demo file in the real one; it was removed). The README and the product page's update steps say what happens.
+
+Checked with real, separate copies on a spare port, each with an empty home folder (no sign-in, no browser):
+released 1.1.0 running and 1.2.0 opened (1.1.0 left alone, message printed); 1.2.0 running and a 1.2.1 copy
+opened (1.2.0 stopped cleanly, 1.2.1 serving, file updated, mode 600); 1.2.0 opened with 1.2.1 running, and
+1.2.1 opened again (page opened, nothing stopped). The dialog path wasn't shown on screen. Offline tests 81/81
+(9 new: the running file, version parsing and reading, and take-over against a real copy for same, newer,
+older, no key, wrong key and a key from another version).
 
 ## 1.1.0, 3 November 2026
 
