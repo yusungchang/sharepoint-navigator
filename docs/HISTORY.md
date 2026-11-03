@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.2.1 | 2026-11-03 | Release fix: the Windows build's tests failed on a file-permission check Windows can't do; that check now runs only on macOS and Linux. 81 offline tests. |
 | 1.2.0 | 2026-11-03 | Opening a new version while an older one runs now stops the old copy and starts the new one (1.1.0 and older get a message to click Stop app instead). 81 offline tests. |
 | 1.1.0 | 2026-11-03 | Check for updates: a round arrow in the header asks GitHub for the newest version only when clicked, and offers the download page. The page and README now say GitHub is the one exception to "talks only to Microsoft". 72 offline tests. |
 | 1.0.1 | 2026-11-03 | The way back from search results is easier to find: Back to libraries stays at the top while scrolling and stands out; the browser's Back button and Esc anywhere also return to the tree. 72 offline tests. |
@@ -35,6 +36,13 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.2.1, 3 November 2026
+
+The v1.2.0 release build failed on Windows, so no 1.2.0 downloads were published. The failing test checks
+that the running file's mode is 600, which can't pass on Windows: it has no Unix permission bits and reports
+666. That check now runs only on macOS and Linux; on Windows the file is private because it sits in the
+user's own profile folder. The app itself is unchanged from 1.2.0. Offline tests 81/81 on macOS.
 
 ## 1.2.0, 3 November 2026
 

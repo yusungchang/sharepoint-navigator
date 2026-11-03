@@ -449,7 +449,10 @@ class AccessTests(ServiceTest):
 
     def test_running_file_is_private_and_holds_the_key(self):
         marker = nav.running_file(self.port)
-        self.assertEqual(stat.S_IMODE(marker.stat().st_mode), 0o600)
+        # Windows has no Unix permission bits (it reports 0o666); there the
+        # file is private because it sits in the user's own profile folder.
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE(marker.stat().st_mode), 0o600)
         info = json.loads(marker.read_text())
         self.assertEqual((info["version"], info["port"], info["token"]), (nav.__version__, self.port, self.token))
 
