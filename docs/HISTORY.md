@@ -40,6 +40,14 @@ terminal, `--version` and `--self-check`.
 From here the vibe scheme goes on from 1.0.0: each session raises z, a new feature raises y.
 Offline tests 72/72.
 
+**Product page, after the release: where the tools are.** People missed the faint "⋯" button at the end of each
+row, so the page has a new section, "Every tool is in the ⋯ menu" (Tools in the top bar). It says to click ⋯ or
+right-click a row, lists what the menu offers on files, folders, libraries and search results, and gives the
+keyboard keys. Beside it is a cropped screenshot of a file row's open menu, in English and Korean, light and
+dark. `tools/shots.py` makes these four `menu*.png` shots by driving Chrome over its DevTools pipe (standard
+library only): Chrome's one-shot `--screenshot` leaves an open row menu out of the picture. The other shots were
+retaken too, so they show 1.0.0. The app itself didn't change. Offline tests 72/72.
+
 ## 0.8.0, 3 November 2026
 
 **Delete.** Files and folders can now be deleted from the tree's row menu ("Delete…", in red, at the bottom).

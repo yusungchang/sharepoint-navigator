@@ -360,7 +360,7 @@ END_SCRIPT = """<script>
   async function run() {
     // Libraries listed and every library measured.
     await wait(() => libraryRows().length >= 9 && !document.querySelector('#tree .size-note'));
-    if (opts.shot === 'tree') {
+    if (opts.shot === 'tree' || opts.shot === 'menu') {
       libraryRows()[0].click();
       await wait(() => document.querySelectorAll('#tree details.node[open] > .children .node').length > 3);
       await new Promise(r => setTimeout(r, 900));
@@ -377,6 +377,16 @@ END_SCRIPT = """<script>
       await wait(() => document.querySelectorAll('#searchResults .search-row').length > 0);
     }
     window.scrollTo(0, 0);
+    if (opts.shot === 'menu') {
+      // The product page's "where the tools are" shot: a file row's ⋯ menu, opened like a click
+      // would. No scrolling (scrolling closes the menu): the window is tall, and tools/shots.py
+      // crops the picture around the row and its menu.
+      await new Promise(r => setTimeout(r, 300));
+      const file = [...document.querySelectorAll('#tree details.node[data-kind="file"] > summary')]
+        .find(s => s.getBoundingClientRect().top > innerHeight * 0.45);
+      if (file) file.querySelector('.row-menu-button').click();
+      await new Promise(r => setTimeout(r, 300));
+    }
     document.body.dataset.demoReady = '1';
   }
   run().catch(err => { document.body.dataset.demoReady = 'error: ' + err.message; });

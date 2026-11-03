@@ -7,6 +7,14 @@ const DL = `https://github.com/${REPO}/releases/latest/download/`;
 // Korean text for every element with data-t. English is in the HTML itself.
 const KO = {
   "nav.features": "기능",
+  "nav.tools": "도구",
+  "tools.title": "모든 도구는 ⋯ 메뉴에 있습니다",
+  "tools.text": "각 행 끝에 작은 <b>⋯</b> 버튼이 있습니다. 누르거나 행 아무 곳이나 오른쪽 클릭하면 그 항목으로 할 수 있는 일이 나옵니다. 메뉴에는 그 행에 맞는 것만 보입니다.",
+  "tools.files": "<b>파일:</b> SharePoint에서 열기, 다운로드, 이름 바꾸기, 폴더로 복사, 폴더로 이동, 삭제",
+  "tools.folders": "<b>폴더:</b> SharePoint에서 열기, 이름 바꾸기, 폴더로 복사, 폴더로 이동, 삭제",
+  "tools.libraries": "<b>라이브러리:</b> SharePoint에서 열기, 이전 버전 정리(사이트 전체)",
+  "tools.search": "<b>검색 결과:</b> 트리에서 보기, 다운로드, SharePoint에서 열기",
+  "tools.keys": "키보드로는 Tab으로 ⋯ 버튼까지 가서 Enter를 누르고, 화살표 키로 움직이고, Esc로 닫습니다.",
   "nav.setup": "설정",
   "nav.download": "다운로드",
   "hero.title": "SharePoint 저장 공간,<br>어디에 쓰이는지 보세요.",
@@ -102,7 +110,7 @@ document.querySelectorAll("[data-t]").forEach((e) => english.set(e, e.innerHTML)
 // Screenshots: one per language and theme; <picture> picks light or dark from the system.
 function showShots(lang) {
   const suffix = lang === "ko" ? "-ko" : "";
-  for (const name of ["tree", "search"]) {
+  for (const name of ["tree", "search", "menu"]) {
     document.getElementById(`shot-${name}`).src = `shots/${name}${suffix}.png`;
     document.getElementById(`shot-${name}-dark`).srcset = `shots/${name}${suffix}-dark.png`;
   }

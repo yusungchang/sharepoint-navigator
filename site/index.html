@@ -23,6 +23,7 @@
     </a>
     <nav>
       <a href="#features" data-t="nav.features">Features</a>
+      <a href="#tools" data-t="nav.tools">Tools</a>
       <a href="#setup" data-t="nav.setup">Setup</a>
       <a href="#download" data-t="nav.download">Download</a>
       <a href="#install" data-t="nav.install">Install</a>
@@ -103,6 +104,27 @@
           <p data-t="f6.text">No PowerShell, no scripts, no agents. One app, one Microsoft sign-in, and it stops when you close its tab.</p>
         </article>
       </div>
+    </section>
+
+    <!-- Where the tools are: every action sits in a row's "⋯" menu, which is easy to miss. -->
+    <section id="tools" class="showcase text-first">
+      <div>
+        <h2 data-t="tools.title">Every tool is in the ⋯ menu</h2>
+        <p data-t="tools.text">Each row ends with a small <b>⋯</b> button. Click it, or right-click anywhere on the row, to see what you can do with that item. The menu shows only what fits the row.</p>
+        <ul class="tool-list">
+          <li data-t="tools.files"><b>Files:</b> Open in SharePoint, Download, Rename, Copy to a folder, Move to a folder, Delete</li>
+          <li data-t="tools.folders"><b>Folders:</b> Open in SharePoint, Rename, Copy to a folder, Move to a folder, Delete</li>
+          <li data-t="tools.libraries"><b>Libraries:</b> Open in SharePoint, Trim old versions (for the whole site)</li>
+          <li data-t="tools.search"><b>Search results:</b> Show in tree, Download, Open in SharePoint</li>
+        </ul>
+        <p class="tool-keys" data-t="tools.keys">With the keyboard: Tab to the ⋯ button and press Enter, move with the arrow keys, and press Esc to close.</p>
+      </div>
+      <figure class="shot">
+        <picture>
+          <source id="shot-menu-dark" srcset="shots/menu-dark.png" media="(prefers-color-scheme: dark)">
+          <img id="shot-menu" src="shots/menu.png" alt="A file row's ⋯ menu, open: Open in SharePoint, Download, Rename, Copy to a folder, Move to a folder and Delete" width="2000" height="1063" loading="lazy">
+        </picture>
+      </figure>
     </section>
 
     <section id="search" class="showcase">
