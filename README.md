@@ -39,8 +39,9 @@ Unzip it, then double-click **SharePoint Navigator**. There's no window of its o
 and closing that tab stops it (after about 15 seconds). Opening the app again while it runs just brings the page
 back. Messages for troubleshooting go to `~/.sharepoint-navigator/app.log`.
 
-- **macOS:** the app is signed and notarized by Apple, so it opens straight away. If you used a version before
-  1.3.0, macOS may ask once to use the saved sign-in in your Keychain; choose **Always Allow**.
+- **macOS:** the app is signed and notarized by Apple. If macOS asks whether to open an app downloaded from
+  the internet, click **Open**. If you used a version before 1.3.0, macOS may also ask once to use the saved
+  sign-in in your Keychain; choose **Always Allow**.
 - **Windows:** the app isn't signed, so on first launch "Windows protected your PC" may appear: click
   **More info**, then **Run anyway**.
 

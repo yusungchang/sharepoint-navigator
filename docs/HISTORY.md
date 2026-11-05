@@ -4,7 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
-| 1.3.0 | 2026-11-05 | The macOS app is signed with the owner's Developer ID and notarized by Apple in the release build, so it opens without the Open Anyway step (from the first signed release on). Windows stays unsigned. 81 offline tests. |
+| 1.3.0 | 2026-11-05 | The macOS app is signed with the owner's Developer ID and notarized by Apple in the release build, so it opens without the Open Anyway step. Windows stays unsigned. The website address yusungchang.com/sharepoint-navigator appears in the app's update panel. 81 offline tests. |
 | 1.2.1 | 2026-11-03 | Release fix: the Windows build's tests failed on a file-permission check Windows can't do; that check now runs only on macOS and Linux. 81 offline tests. |
 | 1.2.0 | 2026-11-03 | Opening a new version while an older one runs now stops the old copy and starts the new one (1.1.0 and older get a message to click Stop app instead). 81 offline tests. |
 | 1.1.0 | 2026-11-03 | Check for updates: a round arrow in the header asks GitHub for the newest version only when clicked, and offers the download page. The page and README now say GitHub is the one exception to "talks only to Microsoft". 72 offline tests. |
@@ -57,8 +57,14 @@ stores once. Windows stays unsigned, the owner's decision for both apps.
   Notarization itself is first tried in CI once the secrets are stored.
 - A side effect: the Keychain's "Always Allow" for the saved sign-in now carries over to later versions,
   because the signature no longer changes with every build.
-- The README and product page still describe the Open Anyway step; that text goes when the first signed
-  release is published, since the download links point at the latest release.
+- *Product page and README* (as PDF Epsilon's): the macOS first-launch step is now only "If macOS asks
+  whether to open an app downloaded from the internet, click Open"; the download dialog no longer says the
+  app isn't signed; the update step "Open Anyway on macOS" is gone. Windows keeps More info, Run anyway.
+  English and Korean.
+- *Website address* (as PDF Epsilon's About window): this app has no About window or menu, so the update
+  panel (round arrow) shows yusungchang.com/sharepoint-navigator under the version, and its download
+  links use that address, which forwards to the GitHub Pages site (checked: 301 to github.io). Finder's
+  Get Info, the README and the release notes show it too.
 
 Offline tests 81/81.
 

@@ -124,7 +124,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          notes="Download the zip for your system, unzip it, and double-click the app. The macOS app is signed and notarized by Apple. First launch on Windows: see https://yusungchang.github.io/sharepoint-navigator/#download. Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/HISTORY.md"
+          notes="Download the zip for your system, unzip it, and double-click the app. The macOS app is signed and notarized by Apple. First launch on Windows: see https://yusungchang.com/sharepoint-navigator/#download. Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/HISTORY.md"
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "SharePoint Navigator ${TAG#v}" --notes "$notes"
           gh release upload "$TAG" out/*.zip -R "$GITHUB_REPOSITORY" --clobber
