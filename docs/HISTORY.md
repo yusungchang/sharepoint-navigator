@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.4.0 | 2026-11-05 | Installers: a .dmg for macOS (drag to Applications; signed and notarized) and a Setup.exe for Windows (per user, Start menu, uninstall in Settings), as PDF Epsilon ships. A zip of the Windows app stays for running without installing. 81 offline tests. |
 | 1.3.1 | 2026-11-05 | Release fix: Apple refused to notarize the 1.3.0 build because of how the build passed the password; fixed, so 1.3.1 is the first signed and notarized release (1.3.0 was never published). Check for updates and the theme names now use PDF Epsilon's wording. 81 offline tests. |
 | 1.3.0 | 2026-11-05 | The macOS app is signed with the owner's Developer ID and notarized by Apple in the release build, so it opens without the Open Anyway step. Windows stays unsigned. The website address yusungchang.com/sharepoint-navigator appears in the app's update panel. 81 offline tests. |
 | 1.2.1 | 2026-11-03 | Release fix: the Windows build's tests failed on a file-permission check Windows can't do; that check now runs only on macOS and Linux. 81 offline tests. |
@@ -38,6 +39,34 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.4.0, 5 November 2026
+
+The owner asked for a .dmg on macOS and an installer on Windows, as PDF Epsilon has, instead of zips.
+
+- *macOS:* `build_app.py` notarizes and staples the app as before, then puts it with a link to Applications
+  into a compressed dmg. Finder sets the window as PDF Epsilon's (Tauri's defaults: 660 x 400, 128-point
+  icons, the app left and Applications right); if Finder can't be scripted, the dmg still works with the
+  default layout. The dmg is signed and notarized too, and its ticket stapled, so Gatekeeper accepts it when
+  it is opened. Built and checked locally (signed, not notarized): the dmg and the app inside pass codesign.
+- *Windows:* `installer/windows.iss` (Inno Setup 6) installs for the current user into
+  `%LOCALAPPDATA%\Programs\SharePoint Navigator` without administrator rights, adds a Start menu entry and an
+  optional desktop shortcut, offers to launch the app at the end, closes a running copy before replacing
+  it, and registers an uninstaller (which stops the app first and leaves the settings folder). English, and
+  Korean when the Inno Setup version has it. Not signed (owner's decision). The bare .exe is still released
+  as `SharePoint-Navigator-Windows.zip` for running without installing.
+- *Release files* now come from `dist/release/` under fixed names: `…-macOS-AppleSilicon.dmg`,
+  `…-Windows-Setup.exe`, `…-Windows.zip`. The Mac zip is gone.
+- *CI* installs Inno Setup when the runner lacks it; checks the dmg (signature, stapled ticket, Gatekeeper
+  "Notarized Developer ID" for opening it) and the app inside it; and on Windows installs silently, runs the
+  installed app's self-check, uninstalls, and checks that the app and its Start menu entry are gone.
+- *Product page and README* (English and Korean): new download buttons (Installer (.exe) and Without
+  installing (.zip) on Windows, as PDF Epsilon's Installer and MSI pair), first-launch and install steps
+  in PDF Epsilon's wording, uninstall through Settings on Windows. The download dialog shows the zip's own
+  steps after the zip is clicked. Updating on macOS while the old version runs: click Stop app first, since
+  Finder may not replace an open app.
+
+Offline tests 81/81.
 
 ## 1.3.1, 5 November 2026
 

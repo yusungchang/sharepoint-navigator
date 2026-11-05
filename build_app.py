@@ -6,33 +6,42 @@ Run on each OS you want a build for (PyInstaller does not cross-compile):
     python -m pip install -r requirements-build.txt
     python build_app.py
 
-Output:
+Output (what gets released is in dist/release/, under the fixed names the product page links to):
   macOS:   dist/SharePoint Navigator.app  (a background app: no Dock window, the browser is its window)
+           dist/release/SharePoint-Navigator-macOS-AppleSilicon.dmg  (or -Intel on an Intel Mac): the
+           app with a link to Applications, to drag across
   Windows: dist/SharePoint Navigator.exe  (one file, no console window)
+           dist/release/SharePoint-Navigator-Windows-Setup.exe  (per-user installer, Inno Setup 6;
+           skipped with a message when ISCC.exe is not installed)
+           dist/release/SharePoint-Navigator-Windows.zip  (the bare .exe, for running without installing)
 Without a terminal, the app shows setup and sign-in in the browser and writes messages to
 ~/.sharepoint-navigator/app.log. A <tenant>_clientid.txt next to the .app or .exe is still honoured.
 
 macOS signing (docs/SIGNING.md): with APPLE_SIGNING_IDENTITY set to a "Developer ID Application: …"
 certificate in the keychain, every binary and the .app are signed with it (hardened runtime,
 secure timestamp). With APPLE_ID, APPLE_PASSWORD (app-specific) and APPLE_TEAM_ID also set, the
-.app is sent to Apple's notary service and the ticket is stapled to it. Without them the build is
-signed ad hoc, as before. Windows is not signed (owner's decision).
+.app and then the .dmg are sent to Apple's notary service and the tickets are stapled to them.
+Without them the build is signed ad hoc, as before. Windows is not signed (owner's decision).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import platform
 import plistlib
 import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 NAME = "SharePoint Navigator"
 BUNDLE_ID = "com.yusungchang.sharepoint-navigator"
+# Fixed names of the released files: the product page links to releases/latest/download/<name>.
+FILE_STEM = "SharePoint-Navigator"
 
 
 def read_version() -> str:
@@ -78,44 +87,163 @@ def finish_mac_app(app: Path, version: str, identity: str) -> None:
         subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
 
 
-def notarize_mac_app(app: Path) -> bool:
-    """Send the signed .app to Apple's notary service and staple the ticket; False on failure.
+def notarize(upload: Path, staple: Path) -> bool:
+    """Send a zip or dmg to Apple's notary service, then staple the ticket to `staple`.
 
-    Skipped (True) when the Apple ID credentials are not set. The ticket stapled to the .app lets
-    Gatekeeper accept it even offline; the zip made afterwards carries it along.
+    False when Apple does not accept it. Skipped (True) when the Apple ID credentials are not set.
+    A stapled ticket lets Gatekeeper accept the file even offline.
     """
     creds = {k: os.environ.get(k, "").strip() for k in ("APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID")}
     if not all(creds.values()):
         print("No APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID: signed, not notarized.")
         return True
+    print(f"Notarizing {staple.name} with Apple (usually a few minutes)...")
+    # notarytool takes the password only as an argument (altool's "@env:" form is not
+    # supported). It is an app-specific password, and CI masks it in the log.
+    result = subprocess.run(
+        ["xcrun", "notarytool", "submit", str(upload), "--wait",
+         "--apple-id", creds["APPLE_ID"], "--team-id", creds["APPLE_TEAM_ID"],
+         "--password", creds["APPLE_PASSWORD"], "--output-format", "json"],
+        capture_output=True, text=True, check=False,
+    )
+    print(result.stdout.strip() or result.stderr.strip())
+    try:
+        status = json.loads(result.stdout).get("status")
+    except ValueError:
+        status = None
+    if status != "Accepted":
+        # Apple's log names each file it rejected and why.
+        print("Notarization was not accepted. Details: xcrun notarytool log <id> ...")
+        return False
+    subprocess.run(["xcrun", "stapler", "staple", str(staple)], check=True)
+    subprocess.run(["xcrun", "stapler", "validate", str(staple)], check=True)
+    return True
+
+
+def notarize_mac_app(app: Path) -> bool:
+    """Notarize the signed .app and staple its ticket, before it goes into the dmg.
+
+    The notary service takes a zip, dmg or pkg, not a bare .app; ditto keeps the bundle intact.
+    """
     work = Path(tempfile.mkdtemp(prefix="spnav-notarize-"))
     try:
-        # The notary service takes a zip, dmg or pkg, not a bare .app; ditto keeps the bundle intact.
         upload = work / "upload.zip"
         subprocess.run(["ditto", "-c", "-k", "--keepParent", str(app), str(upload)], check=True)
-        print("Notarizing with Apple (usually a few minutes)...")
-        # notarytool takes the password only as an argument (altool's "@env:" form is not
-        # supported). It is an app-specific password, and CI masks it in the log.
-        result = subprocess.run(
-            ["xcrun", "notarytool", "submit", str(upload), "--wait",
-             "--apple-id", creds["APPLE_ID"], "--team-id", creds["APPLE_TEAM_ID"],
-             "--password", creds["APPLE_PASSWORD"], "--output-format", "json"],
-            capture_output=True, text=True, check=False,
-        )
-        print(result.stdout.strip() or result.stderr.strip())
-        try:
-            status = json.loads(result.stdout).get("status")
-        except ValueError:
-            status = None
-        if status != "Accepted":
-            # Apple's log names each file it rejected and why.
-            print("Notarization was not accepted. Details: xcrun notarytool log <id> ...")
-            return False
-        subprocess.run(["xcrun", "stapler", "staple", str(app)], check=True)
-        subprocess.run(["xcrun", "stapler", "validate", str(app)], check=True)
-        return True
+        return notarize(upload, app)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+# Finder layout of the dmg window, as PDF Epsilon's (Tauri's defaults): 660 x 400 points, the app
+# on the left and the Applications link on the right, 128-point icons.
+DMG_LAYOUT = """
+tell application "Finder"
+  tell disk "{volume}"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {{200, 120, 860, 520}}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 128
+    set text size of opts to 13
+    set position of item "{app}" of container window to {{180, 170}}
+    set position of item "Applications" of container window to {{480, 170}}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+"""
+
+
+def make_dmg(app: Path, target: Path, identity: str) -> bool:
+    """Put the .app and a link to Applications into a compressed dmg; sign and notarize it.
+
+    The window layout is set through Finder. When Finder can't be scripted (no permission, no
+    session), the dmg still works, just with Finder's default layout, so that only warns.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.unlink(missing_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="spnav-dmg-"))
+    try:
+        stage = work / "stage"
+        stage.mkdir()
+        # ditto keeps the bundle's links, signature and stapled ticket.
+        subprocess.run(["ditto", str(app), str(stage / app.name)], check=True)
+        (stage / "Applications").symlink_to("/Applications")
+        # A writable image first, so Finder can store the layout in it; compressed afterwards.
+        rw = work / "rw.dmg"
+        subprocess.run(["hdiutil", "create", "-quiet", "-srcfolder", str(stage), "-volname", NAME,
+                        "-fs", "HFS+", "-format", "UDRW", "-ov", str(rw)], check=True)
+        # Mounted under /Volumes as usual, since Finder only scripts disks it lists. The name may
+        # get a number ("… 1") if a volume of that name is already open, so read it back.
+        attached = subprocess.run(["hdiutil", "attach", "-readwrite", "-noverify", "-noautoopen",
+                                   "-plist", str(rw)], capture_output=True, check=True)
+        mount = next(Path(e["mount-point"]) for e in plistlib.loads(attached.stdout)["system-entities"]
+                     if e.get("mount-point"))
+        try:
+            script = DMG_LAYOUT.format(volume=mount.name, app=app.name)
+            try:
+                laid_out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True,
+                                          timeout=120, check=False)
+                if laid_out.returncode != 0:
+                    print(f"Warning: dmg window layout not set ({laid_out.stderr.strip()}).")
+            except subprocess.TimeoutExpired:
+                print("Warning: dmg window layout timed out (Finder did not answer).")
+            # macOS's file-event log on the volume is of no use to anyone opening the dmg.
+            shutil.rmtree(mount / ".fseventsd", ignore_errors=True)
+            subprocess.run(["sync"], check=False)
+        finally:
+            subprocess.run(["hdiutil", "detach", "-quiet", str(mount)], check=False)
+        subprocess.run(["hdiutil", "convert", "-quiet", str(rw), "-format", "UDZO",
+                        "-imagekey", "zlib-level=9", "-o", str(target)], check=True)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    if not identity:
+        return True
+    # A signed and notarized dmg passes Gatekeeper's check when it is opened, before the app is.
+    subprocess.run(["codesign", "--force", "--timestamp", "--sign", identity, str(target)], check=True)
+    return notarize(target, target)
+
+
+def find_iscc() -> str:
+    """Path of Inno Setup 6's compiler (ISCC.exe), or "" when it isn't installed."""
+    found = shutil.which("iscc") or shutil.which("ISCC")
+    if found:
+        return found
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"),
+                 os.environ.get("LOCALAPPDATA") and os.path.join(os.environ["LOCALAPPDATA"], "Programs")):
+        candidate = Path(base or "") / "Inno Setup 6" / "ISCC.exe"
+        if base and candidate.is_file():
+            return str(candidate)
+    return ""
+
+
+def make_windows_release(exe: Path, release: Path, version: str) -> bool:
+    """The installer (installer/windows.iss) and a zip of the bare .exe, in `release`."""
+    release.mkdir(parents=True, exist_ok=True)
+    # The portable zip: the .exe alone, for people who'd rather not install (or who put a
+    # <tenant>_clientid.txt next to it).
+    portable = release / f"{FILE_STEM}-Windows.zip"
+    with zipfile.ZipFile(portable, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(exe, exe.name)
+    iscc = find_iscc()
+    if not iscc:
+        print("Inno Setup 6 (ISCC.exe) not found: no installer made. Install it from jrsoftware.org.")
+        # Only a release build must have the installer; CI installs Inno Setup first.
+        return not os.environ.get("CI")
+    result = subprocess.run([
+        iscc, "/Q",
+        f"/DAppVersion={version}",
+        f"/DSourceExe={exe}",
+        f"/DIconFile={ROOT / 'assets' / 'icon.ico'}",
+        f"/DOutputDir={release}",
+        f"/DOutputName={FILE_STEM}-Windows-Setup",
+        str(ROOT / "installer" / "windows.iss"),
+    ], check=False)
+    return result.returncode == 0
 
 
 def main() -> int:
@@ -127,6 +255,7 @@ def main() -> int:
 
     mac = sys.platform == "darwin"
     dist = ROOT / "dist"
+    release = dist / "release"
     version = read_version()
     options = [
         str(ROOT / "sharepoint-navigator.py"),
@@ -138,7 +267,7 @@ def main() -> int:
         "--noconfirm", "--clean", "--log-level", "WARN",
     ]
     # macOS: a normal .app folder (one-file .app bundles are discouraged by PyInstaller).
-    # Windows: one .exe, simplest to hand around.
+    # Windows: one .exe, which the installer copies into place.
     options += ["--osx-bundle-identifier", BUNDLE_ID] if mac else ["--onefile"]
     identity = sign_identity()
     if identity:
@@ -146,6 +275,8 @@ def main() -> int:
         # hardened runtime and a secure timestamp, as notarization requires.
         options += ["--codesign-identity", identity]
 
+    # Start from an empty release folder, so only this build's files are shipped.
+    shutil.rmtree(release, ignore_errors=True)
     # Keep PyInstaller's scratch files out of the project folder (it may be cloud-synced).
     work = Path(tempfile.mkdtemp(prefix="spnav-build-"))
     try:
@@ -160,9 +291,8 @@ def main() -> int:
         shutil.rmtree(dist / NAME, ignore_errors=True)
         if exe.is_file():
             finish_mac_app(app, version, identity)
-        built = app
     else:
-        exe = built = dist / f"{NAME}.exe"
+        exe = dist / f"{NAME}.exe"
     if not exe.is_file():
         print("Build failed: the app was not created.")
         return 1
@@ -171,10 +301,20 @@ def main() -> int:
     if check.returncode != 0:
         print("Build finished, but the app's self-check failed (see ~/.sharepoint-navigator/app.log).")
         return 1
-    # Notarize only after the self-check: running the app does not change the bundle.
-    if mac and identity and not notarize_mac_app(built):
+
+    if mac:
+        # Notarize only after the self-check: running the app does not change the bundle.
+        if identity and not notarize_mac_app(app):
+            return 1
+        chip = "AppleSilicon" if platform.machine() == "arm64" else "Intel"
+        if not make_dmg(app, release / f"{FILE_STEM}-macOS-{chip}.dmg", identity):
+            return 1
+    elif not make_windows_release(exe, release, version):
+        print("The Windows installer could not be made.")
         return 1
-    print(f"\nBuilt {built} (version {version})")
+    print(f"\nBuilt version {version}:")
+    for item in sorted(release.glob("*")):
+        print(f"  {item.relative_to(ROOT)}  ({item.stat().st_size // 1024} KB)")
     return 0
 
 

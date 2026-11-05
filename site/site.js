@@ -61,38 +61,40 @@ const KO = {
   "download.sub": "macOS와 Windows용 무료 앱입니다. SharePoint Online이 포함된 Microsoft 365가 필요합니다.",
   "dl.mac": "Apple 실리콘 (M1 이후)",
   "dl.macNote": "Intel Mac은 소스에서 실행하세요 (GitHub 참고).",
-  "dl.win": "Windows 10, 11 (.zip)",
-  "dl.winNote": "64비트. 설치 없이 압축을 풀고 실행합니다.",
+  "dl.win": "설치 프로그램 (.exe)",
+  "dl.winZip": "설치 없이 쓰기 (.zip)",
+  "dl.winNote": "Windows 10, 11 (64비트).",
   "dl.sourceTitle": "소스에서 실행",
   "dl.source": "Python 3.11 이상",
   "dl.sourceNote": "Intel을 포함한 모든 Mac, Windows, 브라우저가 있는 Linux.",
   "first.title": "처음 실행할 때",
-  "first.mac1": "압축을 풀고 <b>SharePoint Navigator</b>를 두 번 클릭하세요.",
-  "first.mac2": "인터넷에서 다운로드한 앱을 열지 묻는 창이 뜨면 <b>열기</b>를 누르세요.",
+  "first.mac1": ".dmg를 열고 <b>SharePoint Navigator</b>를 응용 프로그램 폴더로 끌어 놓으세요.",
+  "first.mac2": "앱을 여세요. 인터넷에서 다운로드한 앱을 열지 묻는 창이 뜨면 <b>열기</b>를 누르세요.",
   "first.both": "브라우저에서 열립니다. 조직 정보를 한 번 입력하고 화면에 나온 코드로 로그인하세요. 탭을 닫으면 앱도 멈춥니다.",
-  "first.win1": "zip 파일을 오른쪽 클릭 → <b>압축 풀기</b>, 그다음 <b>SharePoint Navigator.exe</b>를 두 번 클릭하세요.",
+  "first.win1": "설치 프로그램을 실행하세요.",
+  "first.winZip": "zip 파일을 오른쪽 클릭 → <b>압축 풀기</b>로 계속 둘 폴더에 풀고, <b>SharePoint Navigator.exe</b>를 두 번 클릭하세요.",
   "first.win2": "‘Windows의 PC 보호’ 창이 뜨면 <b>추가 정보</b> → <b>실행</b>을 누르세요.",
   "first.src1": "macOS: <code>sharepoint-navigator.command</code>를 두 번 클릭.",
   "first.src2": "그 외: <code>pip install -r requirements.txt</code> 후 <code>python sharepoint-navigator.py</code>.",
   "download.all": "모든 버전과 릴리스 노트",
   "nav.install": "설치",
   "inst.title": "설치, 업데이트, 제거",
-  "inst.sub": "설치 프로그램도, 따로 뜨는 창도 없습니다. 앱은 브라우저 안에서 동작합니다. 앱 파일 하나와 사용자 폴더 안의 작은 설정 폴더, 이게 전부입니다.",
+  "inst.sub": "따로 뜨는 창이 없습니다. 앱은 브라우저 안에서 동작합니다. 앱 하나와 사용자 폴더 안의 작은 설정 폴더, 이게 전부입니다.",
   "inst.install": "설치",
   "inst.uninstall": "제거",
-  "inst.mac1": "다운로드한 파일의 압축을 풀고 <b>SharePoint Navigator</b>를 응용 프로그램 폴더(또는 원하는 폴더)로 옮기세요.",
+  "inst.mac1": ".dmg를 열고 <b>SharePoint Navigator</b>를 응용 프로그램 폴더로 끌어 놓으세요.",
   "inst.mac2": "선택: Dock으로 끌어 놓으면 클릭 한 번으로 실행할 수 있습니다.",
   "inst.mac3": "<b>SharePoint Navigator</b>를 휴지통으로 옮기세요.",
   "inst.mac4": "Finder에서 이동 → 폴더로 이동, <code>~/.sharepoint-navigator</code>를 입력하고 그 폴더를 휴지통으로 옮기세요 (저장된 테넌트, 클라이언트 ID, 로그인).",
   "inst.mac5": "키체인 접근에서 <b>msal-extensions</b>를 검색해 그 항목을 삭제하세요 (암호화된 로그인 키).",
-  "inst.win1": "zip 파일을 오른쪽 클릭 → <b>압축 풀기</b>. 문서\\SharePoint Navigator처럼 계속 둘 폴더에 푸세요.",
-  "inst.win2": "선택: <b>SharePoint Navigator.exe</b>를 오른쪽 클릭 → <b>추가 옵션 표시</b> → <b>보내기</b> → <b>바탕 화면에 바로 가기 만들기</b>.",
-  "inst.win3": "<b>SharePoint Navigator.exe</b>가 있는 폴더를 삭제하세요 (바로 가기를 만들었다면 그것도).",
+  "inst.win1": "설치 프로그램을 실행하세요. 지금 사용자에게만 설치되고(관리자 권한 필요 없음) 시작 메뉴에 <b>SharePoint Navigator</b>가 추가됩니다.",
+  "inst.win2": "설치하지 않고 쓰려면 .zip을 계속 둘 폴더에 풀고 <b>SharePoint Navigator.exe</b>를 두 번 클릭하세요.",
+  "inst.win3": "설정 → 앱 → 설치된 앱 → <b>SharePoint Navigator</b> → <b>제거</b>. (설치 없이 썼다면 그 폴더를 삭제하세요.)",
   "inst.win4": "파일 탐색기 주소 표시줄에 <code>%USERPROFILE%\\.sharepoint-navigator</code>를 입력하고 그 폴더를 삭제하세요 (저장된 테넌트, 클라이언트 ID, 로그인).",
   "inst.updateTitle": "업데이트",
   "inst.up0": "새 버전이 나왔는지 보려면 앱 위쪽의 둥근 화살표(<b>업데이트 확인</b>)를 누르세요.",
-  "inst.up1": "새 버전을 받아 예전 앱과 바꾸세요.",
-  "inst.up1b": "예전 버전이 아직 실행 중이면, 새 버전을 열 때 예전 것을 멈추고 대신 실행됩니다. (1.1.0 이하가 실행 중이라면 먼저 그 페이지에서 <b>앱 중지</b>를 누르세요.)",
+  "inst.up1": "새 버전을 받아 같은 방법으로 설치하세요. 예전 버전을 대신합니다.",
+  "inst.up1b": "예전 버전이 아직 실행 중이라면, macOS에서는 바꾸기 전에 그 페이지에서 <b>앱 중지</b>를 누르세요. Windows에서는 설치 프로그램이 알아서 닫습니다.",
   "inst.up2": "테넌트, 클라이언트 ID, 로그인은 그대로라 바로 시작됩니다.",
   "inst.up3": "Windows에서는 새 버전을 처음 열 때 실행 단계가 한 번 더 나옵니다.",
   "inst.up4": "다른 조직으로 바꾸려면 앱 위쪽의 <b>조직 바꾸기</b>를 누르세요.",
@@ -145,8 +147,8 @@ function showPlatform() {
   const primary = document.getElementById("primary");
   const label = document.getElementById("primary-label");
   const choices = {
-    mac: [DL + "SharePoint-Navigator-macOS-AppleSilicon.zip", ko ? "macOS용 다운로드" : "Download for macOS"],
-    windows: [DL + "SharePoint-Navigator-Windows.zip", ko ? "Windows용 다운로드" : "Download for Windows"],
+    mac: [DL + "SharePoint-Navigator-macOS-AppleSilicon.dmg", ko ? "macOS용 다운로드" : "Download for macOS"],
+    windows: [DL + "SharePoint-Navigator-Windows-Setup.exe", ko ? "Windows용 다운로드" : "Download for Windows"],
   };
   document.querySelectorAll(".platforms article").forEach((a) => a.classList.toggle("mine", a.id === os));
   if (os && choices[os]) {
@@ -178,10 +180,14 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest?.('a[href*="/releases/latest/download/"]');
   if (!a) return;
   const os = a.href.includes("macOS") ? "mac" : "windows";
-  const steps = document.querySelector(`.steps[data-os="${os}"] ol`);
+  // The Windows .zip (no installer) has its own steps, kept hidden on the card.
+  const which = a.href.endsWith(".zip") ? 'ol[data-variant="zip"]' : "ol:not([hidden])";
+  const steps = document.querySelector(`.steps[data-os="${os}"] ${which}`);
   const dialog = document.getElementById("after");
   if (!steps || !dialog.showModal) return;
-  document.getElementById("after-steps").replaceChildren(steps.cloneNode(true));
+  const copy = steps.cloneNode(true);
+  copy.hidden = false;
+  document.getElementById("after-steps").replaceChildren(copy);
   dialog.showModal();
 });
 document.getElementById("after").addEventListener("click", (e) => {

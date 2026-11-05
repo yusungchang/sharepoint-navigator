@@ -32,12 +32,15 @@ macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/H
 
 Get the latest build from [Releases](https://github.com/yusungchang/sharepoint-navigator/releases/latest):
 
-- **macOS (Apple silicon):** `SharePoint-Navigator-macOS-AppleSilicon.zip`
-- **Windows 10/11 (64-bit):** `SharePoint-Navigator-Windows.zip`
+- **macOS (Apple silicon):** `SharePoint-Navigator-macOS-AppleSilicon.dmg`: open it and drag
+  **SharePoint Navigator** to Applications.
+- **Windows 10/11 (64-bit):** `SharePoint-Navigator-Windows-Setup.exe`: run the installer. To run it without
+  installing, use `SharePoint-Navigator-Windows.zip` instead: unzip it into a folder that stays and double-click
+  **SharePoint Navigator.exe**.
 
-Unzip it, then double-click **SharePoint Navigator**. There's no window of its own: it opens in your browser,
-and closing that tab stops it (after about 15 seconds). Opening the app again while it runs just brings the page
-back. Messages for troubleshooting go to `~/.sharepoint-navigator/app.log`.
+There's no window of its own: it opens in your browser, and closing that tab stops it (after about 15 seconds).
+Opening the app again while it runs just brings the page back. Messages for troubleshooting go to
+`~/.sharepoint-navigator/app.log`.
 
 - **macOS:** the app is signed and notarized by Apple. If macOS asks whether to open an app downloaded from
   the internet, click **Open**. If you used a version before 1.3.0, macOS may also ask once to use the saved
@@ -47,18 +50,20 @@ back. Messages for troubleshooting go to `~/.sharepoint-navigator/app.log`.
 
 ## Install, update and uninstall
 
-There's no installer: the app is `SharePoint Navigator.app` (macOS) or `SharePoint Navigator.exe` (Windows),
-plus a settings folder in your user folder.
+The app is `SharePoint Navigator.app` (macOS) or `SharePoint Navigator.exe` (Windows), plus a settings folder
+in your user folder.
 
-- **Install:** unzip and keep the app in a folder that stays: Applications on macOS (drag it to the Dock if you like),
-  or e.g. `Documents\SharePoint Navigator` on Windows (Send to → Desktop for a shortcut).
-- **Update:** replace the app with the new one. The tenant, client ID and sign-in are kept. On Windows each
-  new version shows the Run anyway step once more. If the old version is still running, opening the new one
-  stops it and takes its place (from 1.2.0 on; with 1.1.0 or older running, the new one asks you to click
-  **Stop app** in the old page first).
-- **Uninstall:** delete the app, then the settings folder: `~/.sharepoint-navigator` on macOS,
-  `%USERPROFILE%\.sharepoint-navigator` on Windows. On macOS also delete the **msal-extensions** entry in
-  Keychain Access (the key that encrypts the sign-in).
+- **Install:** on macOS, drag the app from the .dmg to Applications (and to the Dock if you like). On Windows,
+  the installer puts it in `%LOCALAPPDATA%\Programs\SharePoint Navigator` for you only (no administrator
+  needed) and adds it to the Start menu, with a desktop shortcut if you tick the box.
+- **Update:** install the new version the same way; it replaces the old one. The tenant, client ID and sign-in
+  are kept. On macOS, if the old version is still running, click **Stop app** in its page before replacing it.
+  On Windows the installer closes a running copy itself, and each new version shows the Run anyway step once
+  more. (Opening a new version while an older one, 1.2.0 or later, still runs also stops the old one.)
+- **Uninstall:** on macOS, move the app to the Trash; on Windows, Settings → Apps → Installed apps →
+  **SharePoint Navigator** → **Uninstall** (without installing: delete its folder). Then delete the settings
+  folder: `~/.sharepoint-navigator` on macOS, `%USERPROFILE%\.sharepoint-navigator` on Windows. On macOS also
+  delete the **msal-extensions** entry in Keychain Access (the key that encrypts the sign-in).
 
 ## First run
 
@@ -130,6 +135,8 @@ python build_app.py
 
 This writes `dist/SharePoint Navigator.app` (macOS, a background app with no Dock window) or
 `dist\SharePoint Navigator.exe` (Windows, no console window), both with the app icon, and runs the self-check.
+The files to hand out go to `dist/release/`: a `.dmg` on macOS; on Windows an installer (needs
+[Inno Setup 6](https://jrsoftware.org/isinfo.php); script in `installer/windows.iss`) and a zip of the `.exe`.
 The icons come from `assets/icon.svg` via `tools/make_icons.py`. PyInstaller builds only for the system it runs on. Pushing a `v*` tag makes GitHub Actions run the
 tests and build both, and attach them to a release ([.github/workflows/build.yml](.github/workflows/build.yml)).
 On macOS the build is signed ad hoc unless `APPLE_SIGNING_IDENTITY` names a Developer ID certificate in your

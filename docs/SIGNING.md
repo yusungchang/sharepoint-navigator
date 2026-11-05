@@ -41,6 +41,8 @@ Repeat steps 1 and 3 when the certificate is renewed, steps 2 and 3 when the App
 - With `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` also set, after the self-check it zips the app,
   sends it to `notarytool submit --wait`, and staples the ticket to the `.app`. Anything but "Accepted"
   fails the build.
+- From 1.4.0 the app is released in a `.dmg`, which is signed with the same identity, notarized and stapled
+  as well (a second, short submission), so Gatekeeper accepts the dmg when it is opened and the app inside.
 - No extra entitlements are needed: the libraries are plain Python extensions, and msal-extensions reaches
   the Keychain through ctypes without callbacks. Checked on 5 November 2026: the signed app passes the
   self-check and serves the page under the hardened runtime.
@@ -54,9 +56,9 @@ Repeat steps 1 and 3 when the certificate is renewed, steps 2 and 3 when the App
   prompt, installs Apple's Developer ID G2 intermediate, and passes the identity and Apple ID values to the
   build. Without the secrets the build is ad hoc; a `v*` tag without them fails, so a release is never
   unsigned.
-- "Check the Mac signature" unpacks the zip as Finder would and checks the copy people get:
-  `codesign --verify`, the Developer ID authority, `xcrun stapler validate`, and `spctl --assess` must say
-  "Notarized Developer ID" when Gatekeeper is on.
+- "Check the Mac dmg and app" checks what people get: the dmg's signature, stapled ticket and Gatekeeper's
+  verdict for opening it; then, mounted, the app inside: `codesign --verify`, the Developer ID authority,
+  `xcrun stapler validate`, and `spctl --assess` must say "Notarized Developer ID" when Gatekeeper is on.
 - If notarization ever seems stuck, `xcrun notarytool history` with the same three Apple values shows
   Apple's side.
 

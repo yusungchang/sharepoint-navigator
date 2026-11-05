@@ -1,7 +1,8 @@
 name: build
 
-# On a v* tag (or by hand): run the offline tests on macOS and Windows, build the single-file
-# app on each, and attach both zips to the tag's GitHub release. The product page links to
+# On a v* tag (or by hand): run the offline tests on macOS and Windows, build the app on each,
+# and attach what build_app.py puts in dist/release/ to the tag's GitHub release: the Mac .dmg,
+# the Windows installer and a portable Windows zip. The product page links to
 # releases/latest/download/<these fixed names>, so keep the names unchanged.
 # The Mac app is signed with the Developer ID and notarized when the APPLE_* secrets exist
 # (docs/SIGNING.md); a v* tag without them fails, so a release is never unsigned.
@@ -20,9 +21,9 @@ jobs:
       matrix:
         include:
           - os: macos-14            # Apple silicon
-            zip: SharePoint-Navigator-macOS-AppleSilicon.zip
+            name: macos-apple-silicon
           - os: windows-latest
-            zip: SharePoint-Navigator-Windows.zip
+            name: windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -78,20 +79,34 @@ jobs:
           else
             echo "No signing secrets: ad hoc signed build."
           fi
-      - name: Build (includes the app's self-check, and signing and notarizing on macOS)
+      # The Windows installer is compiled with Inno Setup 6; install it if the runner lacks it.
+      - name: Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup was not installed." }
+      - name: Build (self-check; signing, notarizing and the dmg on macOS; the installer on Windows)
         run: python build_app.py
-      # ditto keeps the .app's internal links and ad hoc signature, which plain zip can break.
-      - name: Zip (macOS)
-        if: runner.os == 'macOS'
-        run: ditto -c -k --keepParent "dist/SharePoint Navigator.app" "${{ matrix.zip }}"
-      # Check the copy people actually get: unpacked from the zip, as Finder would. A signed build
-      # must carry the Developer ID and a stapled ticket, and Gatekeeper must accept it as notarized.
-      - name: Check the Mac signature
+      # Check what people actually get. The dmg: signed, notarized and stapled, and Gatekeeper accepts
+      # opening it. The app inside it: Developer ID, stapled ticket, "Notarized Developer ID".
+      - name: Check the Mac dmg and app
         if: runner.os == 'macOS'
         run: |
-          U=$(mktemp -d)
-          ditto -x -k "${{ matrix.zip }}" "$U"
-          APP="$U/SharePoint Navigator.app"
+          DMG=$(ls dist/release/*.dmg)
+          if [ "${MAC_SIGNED:-}" = 1 ]; then
+            codesign --verify --verbose=2 "$DMG"
+            xcrun stapler validate "$DMG"
+            if spctl --status | grep -q enabled; then
+              spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG" 2>&1 \
+                | tee /dev/stderr | grep "source=Notarized Developer ID"
+            fi
+          fi
+          M=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$M" "$DMG"
+          APP="$M/SharePoint Navigator.app"
+          test -L "$M/Applications"
           codesign --verify --deep --strict --verbose=2 "$APP"
           if [ "${MAC_SIGNED:-}" = 1 ]; then
             codesign -dv --verbose=2 "$APP" 2>&1 | grep "^Authority=Developer ID Application: "
@@ -101,16 +116,35 @@ jobs:
                 | grep "source=Notarized Developer ID"
             fi
           fi
-      - name: Zip (Windows)
+          hdiutil detach "$M"
+      # Install silently as a user would, run the installed copy's self-check, then uninstall and
+      # make sure it is gone (the Start menu entry too).
+      - name: Check the Windows installer
         if: runner.os == 'Windows'
-        run: Compress-Archive -Path "dist\SharePoint Navigator.exe" -DestinationPath "${{ matrix.zip }}"
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\release\*-Setup.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\SharePoint Navigator'
+          $exe = Join-Path $dir 'SharePoint Navigator.exe'
+          if (-not (Test-Path $exe)) { throw "Not installed at $exe" }
+          $link = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\SharePoint Navigator.lnk'
+          if (-not (Test-Path $link)) { throw "No Start menu entry at $link" }
+          $check = Start-Process $exe -ArgumentList '--self-check' -Wait -PassThru
+          if ($check.ExitCode -ne 0) { throw "The installed app's self-check failed." }
+          Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path $exe) { throw "Uninstall left $exe behind." }
+          if (Test-Path $link) { throw "Uninstall left the Start menu entry behind." }
+          Get-ChildItem dist\release
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.zip }}
-          path: ${{ matrix.zip }}
+          name: sharepoint-navigator-${{ matrix.name }}
+          path: dist/release/*
+          if-no-files-found: error
 
   release:
-    # Only tags make a release; a manual run just leaves the zips as workflow artifacts.
+    # Only tags make a release; a manual run just leaves the files as workflow artifacts.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
@@ -124,7 +158,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          notes="Download the zip for your system, unzip it, and double-click the app. The macOS app is signed and notarized by Apple. First launch on Windows: see https://yusungchang.com/sharepoint-navigator/#download. Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/HISTORY.md"
+          notes="macOS: open the .dmg and drag SharePoint Navigator to Applications (signed and notarized by Apple). Windows: run SharePoint-Navigator-Windows-Setup.exe, or use the zip to run it without installing. First launch: see https://yusungchang.com/sharepoint-navigator/#download. Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/HISTORY.md"
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "SharePoint Navigator ${TAG#v}" --notes "$notes"
-          gh release upload "$TAG" out/*.zip -R "$GITHUB_REPOSITORY" --clobber
+          ls -l out
+          gh release upload "$TAG" out/* -R "$GITHUB_REPOSITORY" --clobber

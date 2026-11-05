@@ -171,25 +171,32 @@
       <div class="platforms">
         <article id="mac">
           <h3>macOS</h3>
-          <a class="button primary dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-macOS-AppleSilicon.zip" data-t="dl.mac">Apple silicon (M1 and later)</a>
+          <a class="button primary dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-macOS-AppleSilicon.dmg" data-t="dl.mac">Apple silicon (M1 and later)</a>
           <p class="note" data-t="dl.macNote">Intel Macs: run from source (see GitHub).</p>
           <div class="steps" data-os="mac">
             <h4 data-t="first.title">First launch</h4>
             <ol>
-              <li data-t="first.mac1">Unzip, then double-click <b>SharePoint Navigator</b>.</li>
-              <li data-t="first.mac2">If macOS asks whether to open an app downloaded from the internet, click <b>Open</b>.</li>
+              <li data-t="first.mac1">Open the .dmg and drag <b>SharePoint Navigator</b> to Applications.</li>
+              <li data-t="first.mac2">Open it. If macOS asks whether to open an app downloaded from the internet, click <b>Open</b>.</li>
               <li data-t="first.both">It opens in your browser: enter your organisation’s details once, then sign in with the code it shows. Closing the tab stops the app.</li>
             </ol>
           </div>
         </article>
         <article id="windows">
           <h3>Windows</h3>
-          <a class="button primary dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-Windows.zip" data-t="dl.win">Windows 10 and 11 (.zip)</a>
-          <p class="note" data-t="dl.winNote">64-bit. No installer: unzip and run.</p>
+          <a class="button primary dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-Windows-Setup.exe" data-t="dl.win">Installer (.exe)</a>
+          <a class="button dl" href="https://github.com/yusungchang/sharepoint-navigator/releases/latest/download/SharePoint-Navigator-Windows.zip" data-t="dl.winZip">Without installing (.zip)</a>
+          <p class="note" data-t="dl.winNote">Windows 10 and 11, 64-bit.</p>
           <div class="steps" data-os="windows">
             <h4 data-t="first.title">First launch</h4>
             <ol>
-              <li data-t="first.win1">Right-click the zip → <b>Extract All</b>, then double-click <b>SharePoint Navigator.exe</b>.</li>
+              <li data-t="first.win1">Run the installer.</li>
+              <li data-t="first.win2">If “Windows protected your PC” appears, click <b>More info</b>, then <b>Run anyway</b>.</li>
+              <li data-t="first.both">It opens in your browser: enter your organisation’s details once, then sign in with the code it shows. Closing the tab stops the app.</li>
+            </ol>
+            <!-- Not shown on the card: the download dialog uses these steps for the .zip. -->
+            <ol data-variant="zip" hidden>
+              <li data-t="first.winZip">Right-click the zip → <b>Extract All</b>, into a folder that stays, then double-click <b>SharePoint Navigator.exe</b>.</li>
               <li data-t="first.win2">If “Windows protected your PC” appears, click <b>More info</b>, then <b>Run anyway</b>.</li>
               <li data-t="first.both">It opens in your browser: enter your organisation’s details once, then sign in with the code it shows. Closing the tab stops the app.</li>
             </ol>
@@ -214,14 +221,14 @@
     <!-- Install, update, uninstall: there is no installer, so these are plain file steps. -->
     <section id="install" class="install">
       <h2 data-t="inst.title">Install, update and uninstall</h2>
-      <p class="sub" data-t="inst.sub">No installer and no window of its own: the app lives in your browser. It’s one app file, plus a small settings folder in your user folder.</p>
+      <p class="sub" data-t="inst.sub">No window of its own: the app lives in your browser. It’s one app, plus a small settings folder in your user folder.</p>
       <div class="platforms">
         <article>
           <h3>macOS</h3>
           <div class="steps">
             <h4 data-t="inst.install">Install</h4>
             <ol>
-              <li data-t="inst.mac1">Unzip the download and move <b>SharePoint Navigator</b> to Applications (or any folder).</li>
+              <li data-t="inst.mac1">Open the .dmg and drag <b>SharePoint Navigator</b> to Applications.</li>
               <li data-t="inst.mac2">Optional: drag it to the Dock to start it with one click.</li>
             </ol>
             <h4 data-t="inst.uninstall">Uninstall</h4>
@@ -237,12 +244,12 @@
           <div class="steps">
             <h4 data-t="inst.install">Install</h4>
             <ol>
-              <li data-t="inst.win1">Right-click the zip → <b>Extract All</b>, into a folder that stays, such as Documents\SharePoint Navigator.</li>
-              <li data-t="inst.win2">Optional: right-click <b>SharePoint Navigator.exe</b> → <b>Show more options</b> → <b>Send to</b> → <b>Desktop (create shortcut)</b>.</li>
+              <li data-t="inst.win1">Run the installer. It installs for you only (no administrator needed) and adds <b>SharePoint Navigator</b> to the Start menu.</li>
+              <li data-t="inst.win2">Rather not install? Unzip the .zip into a folder that stays and double-click <b>SharePoint Navigator.exe</b>.</li>
             </ol>
             <h4 data-t="inst.uninstall">Uninstall</h4>
             <ol>
-              <li data-t="inst.win3">Delete the folder with <b>SharePoint Navigator.exe</b> (and the shortcut, if you made one).</li>
+              <li data-t="inst.win3">Settings → Apps → Installed apps → <b>SharePoint Navigator</b> → <b>Uninstall</b>. (Without installing: delete its folder.)</li>
               <li data-t="inst.win4">Type <code>%USERPROFILE%\.sharepoint-navigator</code> in File Explorer's address bar and delete that folder (saved tenant, client ID and sign-in).</li>
             </ol>
           </div>
@@ -252,8 +259,8 @@
           <div class="steps">
             <ol>
               <li data-t="inst.up0">To see whether a new version is out, click the round arrow at the top of the app (<b>Check for updates</b>).</li>
-              <li data-t="inst.up1">Download the new version and replace the old app with it.</li>
-              <li data-t="inst.up1b">Old version still running? Opening the new one stops it and takes its place. (Running 1.1.0 or older? Click <b>Stop app</b> in its page first.)</li>
+              <li data-t="inst.up1">Download the new version and install it the same way. It replaces the old one.</li>
+              <li data-t="inst.up1b">Old version still running? On macOS, click <b>Stop app</b> in its page before replacing it. On Windows, the installer closes it for you.</li>
               <li data-t="inst.up2">Your tenant, client ID and sign-in are kept, so it starts straight away.</li>
               <li data-t="inst.up3">On Windows, the first launch of each new version shows the Run anyway step once more.</li>
               <li data-t="inst.up4">To switch organisation, click <b>Change organisation</b> at the top of the app.</li>

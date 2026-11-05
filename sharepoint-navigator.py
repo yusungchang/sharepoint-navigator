@@ -83,7 +83,7 @@ from msal_extensions import PersistedTokenCache, build_encrypted_persistence
 
 # App version, "vibe" scheme x.y.z: each working session raises z; a meaningful change raises y
 # and resets z. The only place it is set; every change is recorded in docs/HISTORY.md.
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 
 # User files (client ID) live in APP_ROOT; bundled files (the HTML page) in RESOURCE_ROOT.
 FROZEN = bool(getattr(sys, "frozen", False))
