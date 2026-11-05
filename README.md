@@ -132,6 +132,9 @@ This writes `dist/SharePoint Navigator.app` (macOS, a background app with no Doc
 `dist\SharePoint Navigator.exe` (Windows, no console window), both with the app icon, and runs the self-check.
 The icons come from `assets/icon.svg` via `tools/make_icons.py`. PyInstaller builds only for the system it runs on. Pushing a `v*` tag makes GitHub Actions run the
 tests and build both, and attach them to a release ([.github/workflows/build.yml](.github/workflows/build.yml)).
+On macOS the build is signed ad hoc unless `APPLE_SIGNING_IDENTITY` names a Developer ID certificate in your
+keychain; with Apple ID credentials it is notarized too. The released Mac app is signed and notarized this way
+([docs/SIGNING.md](docs/SIGNING.md)).
 
 ## How it works
 

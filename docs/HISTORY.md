@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.0 | 2026-11-05 | The macOS app is signed with the owner's Developer ID and notarized by Apple in the release build, so it opens without the Open Anyway step (from the first signed release on). Windows stays unsigned. 81 offline tests. |
 | 1.2.1 | 2026-11-03 | Release fix: the Windows build's tests failed on a file-permission check Windows can't do; that check now runs only on macOS and Linux. 81 offline tests. |
 | 1.2.0 | 2026-11-03 | Opening a new version while an older one runs now stops the old copy and starts the new one (1.1.0 and older get a message to click Stop app instead). 81 offline tests. |
 | 1.1.0 | 2026-11-03 | Check for updates: a round arrow in the header asks GitHub for the newest version only when clicked, and offers the download page. The page and README now say GitHub is the one exception to "talks only to Microsoft". 72 offline tests. |
@@ -36,6 +37,30 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.3.0, 5 November 2026
+
+The owner now has an Apple Developer ID (made for PDF Epsilon), so the Mac app is signed and notarized the
+same way PDF Epsilon is: in CI, from six `APPLE_*` repository secrets that `tools/signing/setup-mac.sh`
+stores once. Windows stays unsigned, the owner's decision for both apps.
+
+- `build_app.py`: with `APPLE_SIGNING_IDENTITY` set, PyInstaller signs every bundled library and the launcher
+  with the Developer ID (hardened runtime, secure timestamp). After the `Info.plist` edit only the outer
+  bundle is signed again, then checked with `codesign --verify --deep --strict`. With the Apple ID values
+  too, the app is sent to Apple's notary service after the self-check and the ticket is stapled. Without
+  them the build stays ad hoc, as before.
+- `build.yml`: the certificate goes into a throwaway keychain; a `v*` tag without the secrets fails, so a
+  release is never unsigned; the zip people download is unpacked and checked (Developer ID, stapled
+  ticket, Gatekeeper's "Notarized Developer ID").
+- No entitlements were needed: a local build signed with the Developer ID passed the strict check and the
+  self-check, and started and served the page under the hardened runtime (empty home folder, no sign-in).
+  Notarization itself is first tried in CI once the secrets are stored.
+- A side effect: the Keychain's "Always Allow" for the saved sign-in now carries over to later versions,
+  because the signature no longer changes with every build.
+- The README and product page still describe the Open Anyway step; that text goes when the first signed
+  release is published, since the download links point at the latest release.
+
+Offline tests 81/81.
 
 ## 1.2.1, 3 November 2026
 

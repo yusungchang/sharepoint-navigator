@@ -3,6 +3,8 @@ name: build
 # On a v* tag (or by hand): run the offline tests on macOS and Windows, build the single-file
 # app on each, and attach both zips to the tag's GitHub release. The product page links to
 # releases/latest/download/<these fixed names>, so keep the names unchanged.
+# The Mac app is signed with the Developer ID and notarized when the APPLE_* secrets exist
+# (docs/SIGNING.md); a v* tag without them fails, so a release is never unsigned.
 on:
   push:
     tags: ["v*"]
@@ -31,12 +33,74 @@ jobs:
         run: python -m pip install -r requirements-build.txt
       - name: Offline tests
         run: python -m unittest tests/test_service.py
-      - name: Build (includes the app's self-check)
+      # The certificate goes into a throwaway keychain that only this job uses. build_app.py
+      # signs and notarizes when the APPLE_* variables are set, and signs ad hoc otherwise.
+      - name: Mac signing secrets
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            KC="$RUNNER_TEMP/signing.keychain-db"
+            KC_PASSWORD=$(openssl rand -hex 16)
+            security create-keychain -p "$KC_PASSWORD" "$KC"
+            # No auto-lock during the build (6 h), then unlock it for codesign.
+            security set-keychain-settings -lut 21600 "$KC"
+            security unlock-keychain -p "$KC_PASSWORD" "$KC"
+            printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security import "$RUNNER_TEMP/cert.p12" -k "$KC" -f pkcs12 \
+              -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign >/dev/null
+            rm -f "$RUNNER_TEMP/cert.p12"
+            # Lets codesign use the key without a prompt (there is no one to click Allow).
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASSWORD" "$KC" >/dev/null
+            # Put it first in the search list, keeping the runner's own keychains after it.
+            security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+            # codesign needs Apple's Developer ID intermediate to build the chain; without it the
+            # identity counts as invalid.
+            curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+            sudo security add-certificates -k /Library/Keychains/System.keychain "$RUNNER_TEMP/DeveloperIDG2CA.cer" || true
+            security find-identity -v -p codesigning "$KC" | grep -F "\"$APPLE_SIGNING_IDENTITY\"" >/dev/null \
+              || { echo "::error::The certificate does not hold the identity in APPLE_SIGNING_IDENTITY."; exit 1; }
+            # Values stay masked in the log; each is a single line, as GITHUB_ENV needs.
+            for v in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              printf '%s=%s\n' "$v" "${!v}" >> "$GITHUB_ENV"
+            done
+            echo "MAC_SIGNED=1" >> "$GITHUB_ENV"
+            echo "Signing with the Developer ID and notarizing."
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::A release tag needs the APPLE_* secrets (run tools/signing/setup-mac.sh)."
+            exit 1
+          else
+            echo "No signing secrets: ad hoc signed build."
+          fi
+      - name: Build (includes the app's self-check, and signing and notarizing on macOS)
         run: python build_app.py
       # ditto keeps the .app's internal links and ad hoc signature, which plain zip can break.
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: ditto -c -k --keepParent "dist/SharePoint Navigator.app" "${{ matrix.zip }}"
+      # Check the copy people actually get: unpacked from the zip, as Finder would. A signed build
+      # must carry the Developer ID and a stapled ticket, and Gatekeeper must accept it as notarized.
+      - name: Check the Mac signature
+        if: runner.os == 'macOS'
+        run: |
+          U=$(mktemp -d)
+          ditto -x -k "${{ matrix.zip }}" "$U"
+          APP="$U/SharePoint Navigator.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          if [ "${MAC_SIGNED:-}" = 1 ]; then
+            codesign -dv --verbose=2 "$APP" 2>&1 | grep "^Authority=Developer ID Application: "
+            xcrun stapler validate "$APP"
+            if spctl --status | grep -q enabled; then
+              spctl --assess --type execute --verbose=2 "$APP" 2>&1 | tee /dev/stderr \
+                | grep "source=Notarized Developer ID"
+            fi
+          fi
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path "dist\SharePoint Navigator.exe" -DestinationPath "${{ matrix.zip }}"
@@ -60,7 +124,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          notes="Download the zip for your system, unzip it, and double-click the app. First launch: see https://yusungchang.github.io/sharepoint-navigator/#download. Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/HISTORY.md"
+          notes="Download the zip for your system, unzip it, and double-click the app. The macOS app is signed and notarized by Apple. First launch on Windows: see https://yusungchang.github.io/sharepoint-navigator/#download. Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/HISTORY.md"
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "SharePoint Navigator ${TAG#v}" --notes "$notes"
           gh release upload "$TAG" out/*.zip -R "$GITHUB_REPOSITORY" --clobber
