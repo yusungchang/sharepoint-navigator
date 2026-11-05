@@ -39,11 +39,10 @@ Unzip it, then double-click **SharePoint Navigator**. There's no window of its o
 and closing that tab stops it (after about 15 seconds). Opening the app again while it runs just brings the page
 back. Messages for troubleshooting go to `~/.sharepoint-navigator/app.log`.
 
-The builds aren't signed with a paid certificate yet, so the first launch needs one extra step:
-- **macOS:** when macOS says it can't verify the app, click **Done**, then open System Settings → Privacy &
-  Security, scroll down and click **Open Anyway**. macOS may also ask once to use the saved sign-in in your
-  Keychain; choose **Always Allow**.
-- **Windows:** if "Windows protected your PC" appears, click **More info**, then **Run anyway**.
+- **macOS:** the app is signed and notarized by Apple, so it opens straight away. If you used a version before
+  1.3.0, macOS may ask once to use the saved sign-in in your Keychain; choose **Always Allow**.
+- **Windows:** the app isn't signed, so on first launch "Windows protected your PC" may appear: click
+  **More info**, then **Run anyway**.
 
 ## Install, update and uninstall
 
@@ -52,8 +51,8 @@ plus a settings folder in your user folder.
 
 - **Install:** unzip and keep the app in a folder that stays: Applications on macOS (drag it to the Dock if you like),
   or e.g. `Documents\SharePoint Navigator` on Windows (Send to → Desktop for a shortcut).
-- **Update:** replace the app with the new one. The tenant, client ID and sign-in are kept. Each new version
-  shows the first-launch security step once more. If the old version is still running, opening the new one
+- **Update:** replace the app with the new one. The tenant, client ID and sign-in are kept. On Windows each
+  new version shows the Run anyway step once more. If the old version is still running, opening the new one
   stops it and takes its place (from 1.2.0 on; with 1.1.0 or older running, the new one asks you to click
   **Stop app** in the old page first).
 - **Uninstall:** delete the app, then the settings folder: `~/.sharepoint-navigator` on macOS,
