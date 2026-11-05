@@ -153,6 +153,9 @@
     .update-menu .update-new { color: var(--done-text); font-weight: 700; }
     .update-menu a { display: inline-block; margin-top: 4px; font-weight: 650; }
     .update-menu a.button { color: white; text-decoration: none; }
+    /* The website address: the page's accent (light and dark set --accent), quieter than the buttons. */
+    .update-menu a.update-site { margin-top: 0; color: var(--accent); font-weight: 600; text-decoration: none; }
+    .update-menu a.update-site:hover, .update-menu a.update-site:focus-visible { text-decoration: underline; }
     /* Bar legend. Swatch colors match .bar-segment.current / .history. */
     .legend { color: var(--muted); font-size: 12px; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px 15px; }
     .legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -2647,7 +2650,10 @@
       // files is sent (no cookies, no referrer). Only a strictly formatted version number is
       // trusted from the reply, and the download page it offers is fixed here, never taken from it.
       const UPDATE_LATEST = 'https://api.github.com/repos/yusungchang/sharepoint-navigator/releases/latest';
-      const UPDATE_PAGE = 'https://yusungchang.github.io/sharepoint-navigator/#download';
+      // The product page's own address, which forwards to the GitHub Pages site. Shown under the
+      // version in the panel (this app has no About window) and used for the download links.
+      const SITE_ADDRESS = 'yusungchang.com/sharepoint-navigator';
+      const UPDATE_PAGE = `https://${SITE_ADDRESS}/#download`;
       const updateButton = $('updateButton');
       const updateMenu = $('updateMenu');
       // What the panel shows: null (closed), 'checking', 'latest', 'available', 'failed'.
@@ -2686,6 +2692,14 @@
         updateButton.setAttribute('aria-expanded', String(Boolean(updateState.status)));
         if (!updateState.status) return;
         const lines = [el('p', 'update-version', t('update.current', { version: appVersion ? appVersion.join('.') : '?' }))];
+        // The website address, shown like an About line in every state of the panel.
+        const site = el('a', 'update-site', SITE_ADDRESS);
+        site.href = `https://${SITE_ADDRESS}/`;
+        site.target = '_blank';
+        site.rel = 'noopener noreferrer';
+        const siteLine = el('p');
+        siteLine.append(site);
+        lines.push(siteLine);
         const link = (key, primary) => {
           const a = el('a', primary ? 'button primary' : '', t(key));
           a.href = UPDATE_PAGE;

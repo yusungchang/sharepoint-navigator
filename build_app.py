@@ -64,7 +64,7 @@ def finish_mac_app(app: Path, version: str, identity: str) -> None:
         "LSUIElement": True,
         "CFBundleShortVersionString": version,
         "CFBundleVersion": version,
-        "NSHumanReadableCopyright": "MIT licence · github.com/yusungchang/sharepoint-navigator",
+        "NSHumanReadableCopyright": "MIT licence · yusungchang.com/sharepoint-navigator",  # Finder's Get Info
     })
     with plist_path.open("wb") as handle:
         plistlib.dump(info, handle)

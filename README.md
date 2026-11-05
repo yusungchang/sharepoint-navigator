@@ -4,7 +4,7 @@
 computer and shows every site's Documents library as one tree: how much each library and folder uses, how much
 of that is version history, and where any file is. You can rename, copy, move and delete files and folders and trim old versions.
 
-Product page: <https://yusungchang.github.io/sharepoint-navigator/> · English and 한국어 · light and dark ·
+Product page: <https://yusungchang.com/sharepoint-navigator> · English and 한국어 · light and dark ·
 macOS and Windows · MIT licence. Changes are listed in [docs/HISTORY.md](docs/HISTORY.md).
 
 ## What it does
