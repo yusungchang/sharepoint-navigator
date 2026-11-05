@@ -94,12 +94,12 @@ def notarize_mac_app(app: Path) -> bool:
         upload = work / "upload.zip"
         subprocess.run(["ditto", "-c", "-k", "--keepParent", str(app), str(upload)], check=True)
         print("Notarizing with Apple (usually a few minutes)...")
-        # The password goes in an environment variable, not the command line (process list).
+        # notarytool takes the password only as an argument (altool's "@env:" form is not
+        # supported). It is an app-specific password, and CI masks it in the log.
         result = subprocess.run(
             ["xcrun", "notarytool", "submit", str(upload), "--wait",
              "--apple-id", creds["APPLE_ID"], "--team-id", creds["APPLE_TEAM_ID"],
-             "--password", "@env:SPNAV_NOTARY_PASSWORD", "--output-format", "json"],
-            env={**os.environ, "SPNAV_NOTARY_PASSWORD": creds["APPLE_PASSWORD"]},
+             "--password", creds["APPLE_PASSWORD"], "--output-format", "json"],
             capture_output=True, text=True, check=False,
         )
         print(result.stdout.strip() or result.stderr.strip())
