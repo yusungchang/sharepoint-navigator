@@ -149,7 +149,7 @@
     .update-menu[hidden] { display: none; }
     .update-menu p { margin: 0 0 6px; }
     .update-menu .update-version { color: var(--muted); }
-    .update-menu .update-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+    .update-menu .update-about { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: 12px; }
     .update-menu .update-new { color: var(--done-text); font-weight: 700; }
     .update-menu a { display: inline-block; margin-top: 4px; font-weight: 650; }
     .update-menu a.button { color: white; text-decoration: none; }
@@ -870,9 +870,8 @@
       const I18N = {
         en: {
           'update.label': 'Check for updates', 'update.current': 'You have version {version}.', 'update.checking': 'Checking…',
-          'update.latest': "You're up to date.", 'update.available': 'Version {version} is out.', 'update.download': 'Open the download page',
-          'update.failed': "Couldn't check right now. Check your connection, or visit the website.", 'update.site': 'Visit the website',
-          'update.note': 'Asks GitHub for the newest version number. Nothing else is sent.',
+          'update.latest': 'You’re up to date.', 'update.available': 'Version {version} is out.', 'update.download': 'Open the download page',
+          'update.failed': 'Couldn’t check right now. Check your connection, or visit the website.',
           'theme.label': 'Theme', 'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.system': 'System', 'lang.label': 'Language',
           'badge.title': 'The app runs only on this computer.', 'badge.connecting': 'Connecting…', 'badge.connected': '✓ Connected to SharePoint',
           'badge.notConnected': '⚠ Not connected', 'badge.openFromApp': '⚠ Not connected · open this page from the app',
@@ -1022,10 +1021,9 @@
         },
         ko: {
           'update.label': '업데이트 확인', 'update.current': '지금 버전은 {version}입니다.', 'update.checking': '확인하는 중…',
-          'update.latest': '최신 버전입니다.', 'update.available': '{version} 버전이 나왔습니다.', 'update.download': '다운로드 페이지 열기',
-          'update.failed': '지금은 확인할 수 없습니다. 연결을 확인하거나 웹사이트를 방문하세요.', 'update.site': '웹사이트 방문',
-          'update.note': 'GitHub에 최신 버전 번호만 묻습니다. 다른 것은 보내지 않습니다.',
-          'theme.label': '테마', 'theme.light': '라이트', 'theme.dark': '다크', 'theme.system': '시스템', 'lang.label': '언어',
+          'update.latest': '최신 버전입니다.', 'update.available': '새 버전({version})이 나왔습니다.', 'update.download': '다운로드 페이지 열기',
+          'update.failed': '지금은 확인할 수 없습니다. 인터넷 연결을 확인하거나 웹사이트를 방문해 주세요.',
+          'theme.label': '테마', 'theme.light': '밝게', 'theme.dark': '어둡게', 'theme.system': '시스템 설정', 'lang.label': '언어',
           'badge.title': '이 앱은 이 컴퓨터에서만 실행됩니다.', 'badge.connecting': '연결 중…', 'badge.connected': '✓ SharePoint에 연결됨',
           'badge.notConnected': '⚠ 연결되지 않음', 'badge.openFromApp': '⚠ 연결되지 않음 · 앱에서 이 페이지를 여세요',
           'badge.notRunning': '⚠ 앱이 실행 중이 아님', 'badge.stopped': '중지됨',
@@ -2692,14 +2690,6 @@
         updateButton.setAttribute('aria-expanded', String(Boolean(updateState.status)));
         if (!updateState.status) return;
         const lines = [el('p', 'update-version', t('update.current', { version: appVersion ? appVersion.join('.') : '?' }))];
-        // The website address, shown like an About line in every state of the panel.
-        const site = el('a', 'update-site', SITE_ADDRESS);
-        site.href = `https://${SITE_ADDRESS}/`;
-        site.target = '_blank';
-        site.rel = 'noopener noreferrer';
-        const siteLine = el('p');
-        siteLine.append(site);
-        lines.push(siteLine);
         const link = (key, primary) => {
           const a = el('a', primary ? 'button primary' : '', t(key));
           a.href = UPDATE_PAGE;
@@ -2710,8 +2700,15 @@
         if (updateState.status === 'checking') lines.push(el('p', '', t('update.checking')));
         else if (updateState.status === 'latest') lines.push(el('p', '', t('update.latest')));
         else if (updateState.status === 'available') lines.push(el('p', 'update-new', t('update.available', { version: updateState.latest.join('.') })), link('update.download', true));
-        else lines.push(el('p', '', t('update.failed')), link('update.site', false));
-        lines.push(el('p', 'update-note', t('update.note')));
+        else lines.push(el('p', '', t('update.failed')), link('update.download', false));
+        // The website address, last in every state: this app has no About window to show it.
+        const site = el('a', 'update-site', SITE_ADDRESS);
+        site.href = `https://${SITE_ADDRESS}/`;
+        site.target = '_blank';
+        site.rel = 'noopener noreferrer';
+        const siteLine = el('p', 'update-about');
+        siteLine.append(site);
+        lines.push(siteLine);
         updateMenu.replaceChildren(...lines);
       }
       async function checkForUpdate() {

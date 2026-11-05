@@ -4,6 +4,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.1 | 2026-11-05 | Release fix: Apple refused to notarize the 1.3.0 build because of how the build passed the password; fixed, so 1.3.1 is the first signed and notarized release (1.3.0 was never published). Check for updates and the theme names now use PDF Epsilon's wording. 81 offline tests. |
 | 1.3.0 | 2026-11-05 | The macOS app is signed with the owner's Developer ID and notarized by Apple in the release build, so it opens without the Open Anyway step. Windows stays unsigned. The website address yusungchang.com/sharepoint-navigator appears in the app's update panel. 81 offline tests. |
 | 1.2.1 | 2026-11-03 | Release fix: the Windows build's tests failed on a file-permission check Windows can't do; that check now runs only on macOS and Linux. 81 offline tests. |
 | 1.2.0 | 2026-11-03 | Opening a new version while an older one runs now stops the old copy and starts the new one (1.1.0 and older get a message to click Stop app instead). 81 offline tests. |
@@ -37,6 +38,25 @@ Versions follow the owner's "vibe" scheme: `x.y.z`. Each working session raises 
 (a new feature or product) raises y and resets z to 0. x stays 0 until the owner says 1.0. The version is
 set in one place, `__version__` in `sharepoint-navigator.py`, and shown in the page header, the
 terminal, `--version` and `--self-check`.
+
+## 1.3.1, 5 November 2026
+
+The v1.3.0 tag build signed the Mac app with the Developer ID (the strict check passed in CI), but Apple's
+notary service answered 401 "invalid credentials". The build passed the password as `@env:NAME`, a form
+only the older `altool` understood; `notarytool` took that text as the password. It now gets the
+app-specific password itself (masked in the CI log). The setup script had checked the real credentials
+with Apple, which is why they were known to be right. No 1.3.0 release was published (the release job
+needs both builds), and as with 1.2.0 the pushed tag stays and the fix gets the next number. Checked with
+a trial build on a branch before tagging (Apple: Accepted; the zip's copy assessed as "Notarized Developer
+ID").
+
+Shared wording with PDF Epsilon (owner's request): the Check for updates panel now reads as PDF Epsilon's,
+in English (curly apostrophes) and Korean ("새 버전({version})이 나왔습니다.", "인터넷 연결을 확인하거나 웹사이트를
+방문해 주세요."); when the check fails it offers "Open the download page", as there, instead of a separate
+"Visit the website" button; the extra "Nothing else is sent" note is gone. The panel ends with the website
+address instead, the place PDF Epsilon gives it in its About window. The Korean theme names follow PDF
+Epsilon too: 밝게, 어둡게, 시스템 설정 (were 라이트, 다크, 시스템); the product page's badge says 밝은 화면과
+어두운 화면, and its screenshots were retaken. Offline tests 81/81.
 
 ## 1.3.0, 5 November 2026
 

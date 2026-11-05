@@ -25,7 +25,7 @@ const KO = {
   "b2.label": "모든 사이트를 한 번에", "b2.sub": "하나의 트리, 하나의 기준",
   "b3.label": "버전 기록 표시", "b3.sub": "되찾을 수 있는 공간",
   "b4.label": "모든 사이트 검색", "b4.sub": "찾은 다음 폴더로 바로",
-  "b5.label": "한국어와 English", "b5.sub": "라이트와 다크",
+  "b5.label": "한국어와 English", "b5.sub": "밝은 화면과 어두운 화면",
   "b6.label": "무료 오픈 소스", "b6.sub": "MIT 라이선스",
   "features.title": "저장 공간을 알고 나서 정리하세요",
   "f1.title": "모든 사이트, 하나의 트리",
